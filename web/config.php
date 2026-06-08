@@ -66,6 +66,7 @@ define('POLYMARKET_API', isset($_aigm_config['polymarket']['api_url']) ? $_aigm_
 /* RQDB4AI */
 define('RQDB4AI_API_BASE', isset($_aigm_config['rqdb4ai']['api_base']) ? $_aigm_config['rqdb4ai']['api_base'] : '');
 define('RQDB4AI_API_TOKEN', isset($_aigm_config['rqdb4ai']['api_token']) ? $_aigm_config['rqdb4ai']['api_token'] : '');
+define('RQDB4AI_UI_TITLE', isset($_aigm_config['rqdb4ai']['ui_title']) ? $_aigm_config['rqdb4ai']['ui_title'] : 'Kurage RQDB4AI');
 
 /* Paragraph */
 define('PARAGRAPH_API_KEY', isset($_aigm_config['paragraph']['api_key']) ? $_aigm_config['paragraph']['api_key'] : '');

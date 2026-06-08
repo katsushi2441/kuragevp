@@ -49,7 +49,6 @@ def generate(req: GenerateRequest):
     job_id = new_job_id()
     update_job(
         job_id,
-        job_id=job_id,
         status="queued",
         progress=0,
         url=url,
