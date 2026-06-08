@@ -37,11 +37,8 @@
 
 ## 初期版の処理
 
-画面の「生成開始」は `oss.php` と同じ考え方で、RQDB4AIに `kuragevp_jobs.generate_video_job` をenqueueする。
-PHP側はキュー投入だけを行い、RQDB4AI本体は触らない。
-画面にはキュー登録済みのRQ job IDを表示する。
-
-API単体で動作確認する場合は `POST /generate` に動画URLを渡す。
+画面の「生成開始」は `kurage.php` と同じ考え方で、PHP proxyからKurageVP APIの `POST /generate` へ直接登録する。
+APIは `job_id` を返し、画面は `/status/{job_id}` をpollして進捗を表示する。
 
 処理:
 
@@ -112,16 +109,17 @@ https://kurage.exbridge.jp/kuragev.php?id={job_id}
 - TTS音声のタイミング同期精度を上げる
 - `voice-pro` の `EdgeTTS.srt_to_voice()` 直接利用へ寄せる
 
-## RQDB4AI連携
+## 生成登録方式
+
+KurageVPは `kurage.php` と同じ方式で動かす。
 
 - PHP: `web/kuragevp.php`
-- RQDB4AI callable: `kuragevp_jobs.generate_video_job`
-- callableの動作:
-  1. `KURAGEVP_API_BASE` または `http://exbridge.ddns.net:18202` に `POST /generate`
-  2. `/status/{job_id}` をpoll
-  3. 完了したら `items=1`, `status=ok`, `kurage_url` を返す
+- API: `http://exbridge.ddns.net:18202`
+- 登録: `POST /generate`
+- 進捗: `GET /status/{job_id}`
+- 成果物: `GET /file/{job_id}/{kind}`
 
-RQDB4AI本体にはKurageVP固有コードを入れない。KurageVPのjob callableはKurageVPリポジトリ側のアプリ固有コードとして管理する。
+RQDB4AIへenqueueする方式は使わない。
 
 ## Git push 手順
 

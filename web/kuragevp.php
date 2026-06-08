@@ -45,71 +45,6 @@ function kvp_api($method, $path, $payload = null, $timeout = 20) {
     return array('ok' => ($status >= 200 && $status < 300), 'status' => $status, 'data' => $json);
 }
 
-function kvp_rqdb_api($method, $path, $payload = null, $timeout = 30) {
-    if (!defined('RQDB4AI_API_BASE') || trim(RQDB4AI_API_BASE) === '' || !defined('RQDB4AI_API_TOKEN') || trim(RQDB4AI_API_TOKEN) === '') {
-        return array('ok' => false, 'error' => 'RQDB4AI is not configured');
-    }
-    $url = rtrim(RQDB4AI_API_BASE, '/') . '/' . ltrim($path, '/');
-    $body = $payload === null ? null : json_encode($payload, JSON_UNESCAPED_UNICODE);
-    $headers = array(
-        'Authorization: Bearer ' . RQDB4AI_API_TOKEN,
-        'Content-Type: application/json',
-        'Accept: application/json',
-        'User-Agent: KurageVP/RQDB4AI',
-    );
-    $ch = curl_init($url);
-    curl_setopt_array($ch, array(
-        CURLOPT_CUSTOMREQUEST => $method,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => $timeout,
-        CURLOPT_HTTPHEADER => $headers,
-    ));
-    if ($body !== null) { curl_setopt($ch, CURLOPT_POSTFIELDS, $body); }
-    $raw = curl_exec($ch);
-    $err = curl_error($ch);
-    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if (!$raw || $err) {
-        return array('ok' => false, 'error' => $err ? $err : 'rqdb4ai request failed', 'http_code' => $code);
-    }
-    $data = json_decode($raw, true);
-    if (!is_array($data)) {
-        return array('ok' => false, 'error' => 'rqdb4ai invalid json', 'http_code' => $code, 'raw' => substr($raw, 0, 300));
-    }
-    return $data;
-}
-
-function kvp_enqueue_generate_job($body) {
-    return kvp_rqdb_api('POST', '/api/enqueue', array(
-        'queue' => 'auto',
-        'function' => 'kuragevp_jobs.generate_video_job',
-        'args' => array(),
-        'kwargs' => array(
-            'url' => isset($body['url']) ? (string)$body['url'] : '',
-            'source_lang' => isset($body['source_lang']) ? (string)$body['source_lang'] : 'auto',
-            'target_lang' => isset($body['target_lang']) ? (string)$body['target_lang'] : 'ja',
-            'tts_voice' => isset($body['tts_voice']) ? (string)$body['tts_voice'] : 'ja-JP-NanamiNeural',
-            'source' => 'web_online',
-            'queue_class' => 'web',
-            'priority_class' => 'interactive',
-        ),
-        'meta' => array(
-            'project' => 'kuragevp',
-            'app' => 'voice-pro',
-            'kind' => 'video-translation',
-            'source' => 'web_online',
-            'queue_class' => 'web',
-            'priority_class' => 'interactive',
-            'resource' => 'voice-pro',
-            'url' => isset($body['url']) ? (string)$body['url'] : '',
-        ),
-        'timeout' => 7200,
-        'result_ttl' => 86400,
-        'failure_ttl' => 604800,
-    ));
-}
-
 $proxy = isset($_GET['proxy']) ? $_GET['proxy'] : '';
 if ($proxy !== '') {
     if ($proxy === 'file' && isset($_GET['job_id'], $_GET['kind'])) {
@@ -139,12 +74,8 @@ if ($proxy !== '') {
             exit;
         }
         $body = json_decode(file_get_contents('php://input'), true);
-        $job_res = kvp_enqueue_generate_job(is_array($body) ? $body : array());
-        if (empty($job_res['ok']) || empty($job_res['job']['id'])) {
-            echo json_encode(array('ok' => false, 'error' => isset($job_res['error']) ? $job_res['error'] : 'rqdb4ai enqueue failed', 'detail' => $job_res), JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        echo json_encode(array('ok' => true, 'status' => 'queued', 'rq_job' => $job_res['job'], 'rq_job_id' => $job_res['job']['id']), JSON_UNESCAPED_UNICODE);
+        $res = kvp_api('POST', '/generate', is_array($body) ? $body : array(), 30);
+        echo json_encode(isset($res['data']) ? $res['data'] : array('ok' => false, 'error' => isset($res['error']) ? $res['error'] : 'API unreachable'), JSON_UNESCAPED_UNICODE);
     } elseif ($proxy === 'status' && isset($_GET['job_id'])) {
         $jid = preg_replace('/[^a-zA-Z0-9]/', '', $_GET['job_id']);
         $res = kvp_api('GET', '/status/' . $jid, null, 15);
@@ -293,14 +224,7 @@ if(isAdmin){
     try{
       const d = await api('?proxy=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,source_lang:'auto',target_lang:qs('#target_lang').value,tts_voice:qs('#voice').value})});
       if(!d.ok){alert(d.error || '登録失敗');return;}
-      if(d.rq_job_id){
-        qs('#status').style.display='block';
-        qs('#badge').textContent = 'queued';
-        qs('#fill').style.width = '15%';
-        qs('#note').textContent = 'RQジョブ登録済み: ' + d.rq_job_id;
-        qs('#outputs').innerHTML = '<a target="_blank" href="/rqdb4ai.php">RQDB4AIで確認</a>';
-        setTimeout(loadJobs, 2500);
-      } else if(d.job_id) {
+      if(d.job_id) {
         await watch(d.job_id);
       }
       await loadJobs();
