@@ -75,10 +75,12 @@ PHP:
 
 ```text
 web/kuragevp.php -> /web/kurage_exbridge_jp/kuragevp.php
-web/aiknowledgesns.php -> /web/kurage_exbridge_jp/aiknowledgesns.php
 web/auth_common.php -> /web/kurage_exbridge_jp/auth_common.php
 web/config.php -> /web/kurage_exbridge_jp/config.php
 ```
+
+XログインのOAuth入口は `kurage.exbridge.jp` には置かない。
+`auth_common.php` から `https://aiknowledgecms.exbridge.jp/aiknowledgesns.php` へ飛ばし、戻り先だけ `https://kurage.exbridge.jp/...` にする。
 
 API:
 
