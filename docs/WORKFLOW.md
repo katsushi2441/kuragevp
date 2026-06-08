@@ -122,3 +122,23 @@ https://kurage.exbridge.jp/kuragev.php?id={job_id}
   3. 完了したら `items=1`, `status=ok`, `kurage_url` を返す
 
 RQDB4AI本体にはKurageVP固有コードを入れない。KurageVPのjob callableはKurageVPリポジトリ側のアプリ固有コードとして管理する。
+
+## Git push 手順
+
+このサーバのCodexからGitHubへpushするときは、鍵入りのssh-agentを明示する。
+`git push origin main` だけだと、agentが見えずに失敗することがある。
+
+成功確認済み:
+
+```bash
+cd /home/kojima/exdirect/kuragevp
+SSH_AUTH_SOCK=/tmp/ssh-XXXXXX1CDlcM/agent.3865478 git push origin main
+```
+
+確認方法:
+
+```bash
+SSH_AUTH_SOCK=/tmp/ssh-XXXXXX1CDlcM/agent.3865478 ssh-add -L
+```
+
+`vastai-host` の `ssh-ed25519` 鍵が表示されれば、そのagentを使う。
