@@ -1,0 +1,8 @@
+.venv/
+vendor/
+storage/jobs/*
+storage/tmp/*
+!storage/jobs/.gitkeep
+!storage/tmp/.gitkeep
+*.pyc
+__pycache__/
