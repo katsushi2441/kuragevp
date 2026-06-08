@@ -95,24 +95,83 @@ def safe_name(text: str) -> str:
     return text[:80] or "video"
 
 
+def extract_tweet_id(url: str) -> str:
+    m = re.search(r"(\d{15,20})", url)
+    return m.group(1) if m else ""
+
+
+def fetch_fxtwitter(tweet_id: str) -> dict[str, Any]:
+    api_url = f"https://api.fxtwitter.com/i/status/{re.sub(r'[^0-9]', '', tweet_id)}"
+    raw = run_cmd(["curl", "-s", "--max-time", "10", api_url], timeout=20)
+    try:
+        data = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError(f"FxTwitter JSON parse failed: {raw[:500]}") from exc
+    if not isinstance(data, dict) or not data.get("tweet"):
+        raise RuntimeError("FxTwitter tweet data not found")
+    return data
+
+
+def extract_best_video_url(fx_data: dict[str, Any]) -> str:
+    tweet = fx_data.get("tweet") if isinstance(fx_data.get("tweet"), dict) else {}
+    media = tweet.get("media") if isinstance(tweet.get("media"), dict) else {}
+    candidates: list[tuple[int, str]] = []
+
+    for key in ("videos", "gifs"):
+        items = media.get(key) if isinstance(media.get(key), list) else []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("url"):
+                candidates.append((0, str(item["url"])))
+            variants = item.get("variants") if isinstance(item.get("variants"), list) else []
+            for variant in variants:
+                if not isinstance(variant, dict) or not variant.get("url"):
+                    continue
+                bitrate = int(variant.get("bitrate") or 0)
+                candidates.append((bitrate, str(variant["url"])))
+
+    candidates = [(bitrate, url) for bitrate, url in candidates if url]
+    if not candidates:
+        raise RuntimeError("動画URLを取得できませんでした")
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def curl_download(url: str, out_file: Path, timeout: int = 1800) -> Path:
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    run_cmd([
+        "curl",
+        "-s",
+        "-L",
+        "--max-time",
+        str(timeout),
+        "-A",
+        "Mozilla/5.0",
+        "-o",
+        str(out_file),
+        url,
+    ], timeout=timeout + 30)
+    if not out_file.exists() or out_file.stat().st_size <= 0:
+        raise RuntimeError("動画ダウンロードに失敗しました")
+    return out_file
+
+
 def download_video(url: str, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     if re.match(r"^https?://", url):
-        tmpl = str(out_dir / "%(title).80s.%(ext)s")
-        run_cmd([
-            "yt-dlp",
-            "-f",
-            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "--merge-output-format",
-            "mp4",
-            "-o",
-            tmpl,
-            url,
-        ], timeout=1800)
-        files = sorted(out_dir.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if not files:
-            raise RuntimeError("yt-dlp did not create mp4")
-        return files[0]
+        tweet_id = extract_tweet_id(url)
+        if tweet_id and ("x.com/" in url or "twitter.com/" in url):
+            fx_data = fetch_fxtwitter(tweet_id)
+            media_url = extract_best_video_url(fx_data)
+            return curl_download(media_url, out_dir / f"x_{tweet_id}.mp4")
+
+        clean = url.split("?", 1)[0]
+        ext = "mp4"
+        m = re.search(r"\.([a-zA-Z0-9]{2,5})$", clean)
+        if m and m.group(1).lower() in {"mp4", "mov", "m4v", "webm"}:
+            ext = m.group(1).lower()
+        return curl_download(url, out_dir / f"{safe_name(clean)}.{ext}")
 
     src = Path(url)
     if src.exists():

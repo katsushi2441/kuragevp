@@ -42,7 +42,7 @@ APIは `job_id` を返し、画面は `/status/{job_id}` をpollして進捗を�
 
 処理:
 
-1. `yt-dlp` で動画取得
+1. `umedia.php` と同じくFxTwitter + curlで動画取得
 2. `ffmpeg` で `source.wav` 抽出
 3. `faster-whisper` で `source.srt` / `source.txt` 作成
 4. `deep-translator` で `translated.<lang>.srt` 作成
@@ -103,7 +103,7 @@ https://kurage.exbridge.jp/kuragev.php?id={job_id}
 ## 次にやること
 
 - `.venv` を作成して `backend/requirements.txt` を入れる
-- 実動画URLで `yt-dlp` と `ffmpeg` の動作確認
+- 実動画URLでFxTwitter/curl取得と `ffmpeg` の動作確認
 - `faster-whisper` のGPU/CPU設定を調整
 - 長尺動画向けにジョブタイムアウト、分割処理を追加
 - TTS音声のタイミング同期精度を上げる

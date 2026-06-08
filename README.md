@@ -36,7 +36,7 @@ Kurage Voice Pro (`kuragevp`) は、URLから動画を取得し、音声抽出�
 
 初期版はCLIで安定する経路を優先する。
 
-- 動画取得: `yt-dlp`
+- 動画取得: `umedia.php` と同じくFxTwitter + curlでX動画を取得。通常の動画URLはcurlで直接取得。
 - 音声抽出/字幕焼き込み/音声差し替え: `ffmpeg`
 - 文字起こし: `faster-whisper` があれば使用。なければエラーとして依存追加を促す。
 - 翻訳: `deep-translator` があれば使用。

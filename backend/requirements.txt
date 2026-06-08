@@ -2,10 +2,8 @@ fastapi
 uvicorn
 pydantic
 requests
-yt-dlp
 faster-whisper
 deep-translator
 edge-tts
 pysubs2
 python-multipart
-
