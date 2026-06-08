@@ -52,7 +52,8 @@ define('OLLAMA_MODEL', isset($_aigm_config['ollama']['default_model'])  ? $_aigm
 
 /* Site */
 define('AIGM_BASE_URL',      isset($_aigm_config['site']['base_url'])      ? $_aigm_config['site']['base_url']      : 'https://kurage.exbridge.jp');
-define('AIGM_COOKIE_DOMAIN', isset($_aigm_config['site']['cookie_domain']) ? $_aigm_config['site']['cookie_domain'] : 'kurage.exbridge.jp');
+define('AIGM_AUTH_BASE_URL', isset($_aigm_config['site']['auth_base_url']) ? $_aigm_config['site']['auth_base_url'] : 'https://aiknowledgecms.exbridge.jp');
+define('AIGM_COOKIE_DOMAIN', isset($_aigm_config['site']['cookie_domain']) ? $_aigm_config['site']['cookie_domain'] : '.exbridge.jp');
 define('AIGM_ADMIN',         isset($_aigm_config['site']['admin'])         ? $_aigm_config['site']['admin']         : 'xb_bittensor');
 define('AIGM_GTAG_ID',       isset($_aigm_config['site']['gtag_id'])       ? $_aigm_config['site']['gtag_id']       : '');
 
