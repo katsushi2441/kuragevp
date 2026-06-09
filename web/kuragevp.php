@@ -103,6 +103,15 @@ $api_ok = $health['ok'] && !empty($health['data']['ok']);
 <meta name="description" content="URL動画から音声を抽出し、文字起こし、翻訳、翻訳字幕、翻訳音声、吹き替え動画を生成するKurage Voice Pro。">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://kurage.exbridge.jp/kuragevp.php">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kurage Voice-Pro | 翻訳字幕・吹き替え動画生成">
+<meta property="og:description" content="Xなどの動画URLから音声認識、翻訳字幕、翻訳音声、字幕付き吹き替え動画を生成するKurage Voice-Pro。">
+<meta property="og:url" content="https://kurage.exbridge.jp/kuragevp.php">
+<meta property="og:image" content="https://kurage.exbridge.jp/images/kuragevp.png">
+<meta property="og:image:width" content="1731">
+<meta property="og:image:height" content="909">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://kurage.exbridge.jp/images/kuragevp.png">
 <style>
 :root{--bg:#f6f8f8;--surface:#fff;--border:#dbe5e8;--accent:#007f96;--accent2:#102a43;--text:#132329;--muted:#60717a;--green:#2f8f45;--red:#b83232}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;font-size:14px}
