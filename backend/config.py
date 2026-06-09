@@ -17,6 +17,7 @@ DEFAULT_TTS_VOICE = os.environ.get("KURAGEVP_TTS_VOICE", "ja-JP-NanamiNeural")
 WHISPER_MODEL = os.environ.get("KURAGEVP_WHISPER_MODEL", "small")
 WHISPER_DEVICE = os.environ.get("KURAGEVP_WHISPER_DEVICE", "cuda")
 WHISPER_COMPUTE_TYPE = os.environ.get("KURAGEVP_WHISPER_COMPUTE_TYPE", "float16")
+FFMPEG_BIN = os.environ.get("KURAGEVP_FFMPEG_BIN", "/usr/bin/ffmpeg")
 
 KURAGE_JOBS_DIR = Path(os.environ.get("KURAGE_JOBS_DIR", "/home/kojima/work/kurage/storage/jobs"))
 KURAGE_PUBLIC_BASE_URL = os.environ.get("KURAGE_PUBLIC_BASE_URL", "https://kurage.exbridge.jp").rstrip("/")

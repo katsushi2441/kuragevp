@@ -16,6 +16,7 @@ try:
         DEFAULT_SOURCE_LANG,
         DEFAULT_TARGET_LANG,
         DEFAULT_TTS_VOICE,
+        FFMPEG_BIN,
         JOBS_DIR,
         KURAGE_JOBS_DIR,
         KURAGE_PUBLIC_BASE_URL,
@@ -30,6 +31,7 @@ except ImportError:
         DEFAULT_SOURCE_LANG,
         DEFAULT_TARGET_LANG,
         DEFAULT_TTS_VOICE,
+        FFMPEG_BIN,
         JOBS_DIR,
         KURAGE_JOBS_DIR,
         KURAGE_PUBLIC_BASE_URL,
@@ -216,7 +218,7 @@ def download_video(url: str, out_dir: Path) -> Path:
 
 def extract_audio(video: Path, out_dir: Path) -> Path:
     audio = out_dir / "source.wav"
-    run_cmd(["ffmpeg", "-y", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", str(audio)], timeout=1800)
+    run_cmd([FFMPEG_BIN, "-y", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", str(audio)], timeout=1800)
     return audio
 
 
@@ -289,9 +291,9 @@ def tts_from_srt(translated_srt: Path, out_dir: Path, voice: str) -> Path:
     concat_file.write_text("".join(f"file '{p.as_posix()}'\n" for p in segment_files), encoding="utf-8")
     out = out_dir / "translated_voice.m4a"
     if segment_files:
-        run_cmd(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c:a", "aac", str(out)], timeout=1800)
+        run_cmd([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c:a", "aac", str(out)], timeout=1800)
     else:
-        run_cmd(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "1", str(out)], timeout=60)
+        run_cmd([FFMPEG_BIN, "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "1", str(out)], timeout=60)
     return out
 
 
@@ -305,14 +307,14 @@ def srt_plain_text(srt_path: Path) -> str:
 def burn_subtitles(video: Path, translated_srt: Path, out_dir: Path) -> Path:
     out = out_dir / "subtitled.mp4"
     vf = f"subtitles={translated_srt.as_posix()}:force_style='FontSize=22,Outline=2,Shadow=1'"
-    run_cmd(["ffmpeg", "-y", "-i", str(video), "-vf", vf, "-c:a", "copy", str(out)], timeout=3600)
+    run_cmd([FFMPEG_BIN, "-y", "-i", str(video), "-vf", vf, "-c:a", "copy", str(out)], timeout=3600)
     return out
 
 
 def replace_audio(video: Path, translated_audio: Path, out_dir: Path) -> Path:
     out = out_dir / "dubbed.mp4"
     run_cmd([
-        "ffmpeg",
+        FFMPEG_BIN,
         "-y",
         "-i",
         str(video),
@@ -335,7 +337,7 @@ def replace_audio(video: Path, translated_audio: Path, out_dir: Path) -> Path:
 def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path) -> Path:
     out = out_dir / "translated_subtitled_dubbed.mp4"
     run_cmd([
-        "ffmpeg",
+        FFMPEG_BIN,
         "-y",
         "-i",
         str(subtitled_video),
@@ -357,7 +359,7 @@ def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path
 
 def make_thumbnail(video: Path, out: Path) -> Path:
     run_cmd([
-        "ffmpeg",
+        FFMPEG_BIN,
         "-y",
         "-ss",
         "3",
