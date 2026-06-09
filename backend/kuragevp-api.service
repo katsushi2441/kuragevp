@@ -8,6 +8,8 @@ WorkingDirectory=/home/kojima/work/kuragevp
 Environment=KURAGEVP_PORT=18302
 Environment=KURAGEVP_ROOT=/home/kojima/work/kuragevp
 Environment=KURAGE_JOBS_DIR=/home/kojima/work/kurage/storage/jobs
+Environment=KURAGEVP_WHISPER_DEVICE=cuda
+Environment=KURAGEVP_WHISPER_COMPUTE_TYPE=float16
 ExecStart=/home/kojima/work/kuragevp/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 18302
 Restart=always
 RestartSec=5
