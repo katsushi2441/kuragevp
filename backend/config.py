@@ -20,9 +20,9 @@ WHISPER_COMPUTE_TYPE = os.environ.get("KURAGEVP_WHISPER_COMPUTE_TYPE", "float16"
 FFMPEG_BIN = os.environ.get("KURAGEVP_FFMPEG_BIN", "/usr/bin/ffmpeg")
 SUBTITLE_STYLE = os.environ.get(
     "KURAGEVP_SUBTITLE_STYLE",
-    "FontName=Noto Sans CJK JP,FontSize=30,PrimaryColour=&H00FFFFFF,"
-    "OutlineColour=&H00000000,BackColour=&H99000000,BorderStyle=3,"
-    "Outline=1,Shadow=0,Alignment=2,MarginV=58",
+    "FontName=Noto Sans CJK JP,FontSize=36,PrimaryColour=&H00FFFFFF,"
+    "OutlineColour=&H00000000,BackColour=&H70000000,BorderStyle=1,"
+    "Bold=-1,Outline=4,Shadow=2,Alignment=2,MarginL=34,MarginR=34,MarginV=86",
 )
 
 KURAGE_JOBS_DIR = Path(os.environ.get("KURAGE_JOBS_DIR", "/home/kojima/work/kurage/storage/jobs"))

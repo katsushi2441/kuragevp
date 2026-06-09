@@ -306,10 +306,129 @@ def srt_plain_text(srt_path: Path) -> str:
     return "\n".join(event.plaintext.strip() for event in subs if event.plaintext.strip())
 
 
+def split_caption_text(text: str, max_chars: int = 30) -> list[str]:
+    text = re.sub(r"\s+", " ", (text or "").strip())
+    if not text:
+        return []
+
+    parts = [p for p in re.split(r"(?<=[。！？!?、,])", text) if p]
+    chunks: list[str] = []
+    current = ""
+    for part in parts:
+        if len(current) + len(part) <= max_chars:
+            current += part
+            continue
+        if current:
+            chunks.append(current.strip())
+        while len(part) > max_chars:
+            chunks.append(part[:max_chars].strip())
+            part = part[max_chars:]
+        current = part
+    if current:
+        chunks.append(current.strip())
+    return chunks
+
+
+def wrap_caption_text(text: str, line_chars: int = 15) -> str:
+    text = text.strip()
+    if len(text) <= line_chars:
+        return text
+    lines: list[str] = []
+    current = ""
+    for ch in text:
+        current += ch
+        if len(current) >= line_chars:
+            lines.append(current)
+            current = ""
+    if current:
+        lines.append(current)
+    return r"\N".join(lines[:2])
+
+
+def make_kurage_ass(translated_srt: Path, out_dir: Path) -> Path:
+    import pysubs2
+
+    source = pysubs2.load(str(translated_srt), encoding="utf-8")
+    ass = pysubs2.SSAFile()
+    ass.info["ScriptType"] = "v4.00+"
+    ass.info["PlayResX"] = "576"
+    ass.info["PlayResY"] = "1024"
+    ass.info["WrapStyle"] = "0"
+    ass.styles["Default"] = pysubs2.SSAStyle(
+        fontname="Noto Sans CJK JP",
+        fontsize=36,
+        primarycolor=pysubs2.Color(255, 255, 255, 0),
+        outlinecolor=pysubs2.Color(0, 0, 0, 0),
+        backcolor=pysubs2.Color(0, 0, 0, 120),
+        bold=True,
+        borderstyle=1,
+        outline=4,
+        shadow=2,
+        alignment=2,
+        marginl=34,
+        marginr=34,
+        marginv=86,
+    )
+
+    for event in source:
+        chunks = split_caption_text(event.plaintext, max_chars=30)
+        if not chunks:
+            continue
+        start = int(event.start)
+        end = int(event.end)
+        duration = max(600, end - start)
+        chunk_duration = max(650, duration // len(chunks))
+        for index, chunk in enumerate(chunks):
+            ev_start = start + index * chunk_duration
+            ev_end = end if index == len(chunks) - 1 else min(end, ev_start + chunk_duration)
+            if ev_end <= ev_start:
+                ev_end = ev_start + 650
+            ass.events.append(
+                pysubs2.SSAEvent(
+                    start=ev_start,
+                    end=ev_end,
+                    text=wrap_caption_text(chunk),
+                    style="Default",
+                )
+            )
+
+    out = out_dir / "translated.kurage.ass"
+    ass.save(str(out))
+    return out
+
+
 def burn_subtitles(video: Path, translated_srt: Path, out_dir: Path) -> Path:
     out = out_dir / "subtitled.mp4"
-    vf = f"subtitles={translated_srt.as_posix()}:force_style='{SUBTITLE_STYLE}'"
-    run_cmd([FFMPEG_BIN, "-y", "-i", str(video), "-vf", vf, "-c:a", "copy", str(out)], timeout=3600)
+    ass = make_kurage_ass(translated_srt, out_dir)
+    filter_complex = (
+        "[0:v]scale=576:1024:force_original_aspect_ratio=increase,"
+        "crop=576:1024,boxblur=18:1,eq=brightness=-0.20[bg];"
+        "[0:v]scale=576:1024:force_original_aspect_ratio=decrease[fg];"
+        "[bg][fg]overlay=(W-w)/2:(H-h)/2,"
+        f"subtitles={ass.as_posix()}[v]"
+    )
+    run_cmd([
+        FFMPEG_BIN,
+        "-y",
+        "-i",
+        str(video),
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[v]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-c:a",
+        "aac",
+        "-shortest",
+        str(out),
+    ], timeout=3600)
     return out
 
 
