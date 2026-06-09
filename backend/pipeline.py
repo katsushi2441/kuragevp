@@ -325,6 +325,23 @@ def srt_plain_text(srt_path: Path) -> str:
     return "\n".join(event.plaintext.strip() for event in subs if event.plaintext.strip())
 
 
+def public_title_from_source(source: dict[str, str], target_lang: str) -> str:
+    text = (source.get("tweet_text") or "").strip()
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    if not first_line:
+        return f"Kurage Voice Pro 翻訳動画 {target_lang.upper()}"
+    title = first_line
+    if target_lang == "ja" and re.search(r"[A-Za-z]", title):
+        try:
+            from deep_translator import GoogleTranslator
+
+            title = GoogleTranslator(source="auto", target="ja").translate(title) or title
+        except Exception:
+            pass
+    title = re.sub(r"\s+", " ", title).strip()
+    return title[:48]
+
+
 def split_caption_text(text: str, max_chars: int = 30) -> list[str]:
     text = re.sub(r"\s+", " ", (text or "").strip())
     if not text:
@@ -529,9 +546,9 @@ def publish_to_kurage(job_id: str, full_video: Path, translated_srt: Path, trans
     except Exception:
         thumbnail.write_bytes(b"")
 
-    title = f"Kurage Voice Pro 翻訳動画 {target_lang.upper()}"
     created = now()
     source = source_metadata(source_url)
+    title = public_title_from_source(source, target_lang)
     data = {
         "job_id": job_id,
         "status": "done",
