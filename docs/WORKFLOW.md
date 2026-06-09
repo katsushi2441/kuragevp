@@ -61,12 +61,13 @@ APIは `job_id` を返し、画面は `/status/{job_id}` をpollして進捗を�
 - `vendor/voice-pro/app/abus_tts_edge.py`
 - `vendor/voice-pro/app/abus_ffmpeg.py`
 
-初期実装は、voice-proの設計に沿ってCLIで安定実行する形にしている。
+初期実装は、voice-proの設計に沿ってCLIで安定実行する形にしている。現在の翻訳音声は元動画の声ではなく Edge-TTS 音声。
 依存が揃ったら、以下を直接呼び出す方向へ寄せる。
 
 - `YoutubeDownloader.yt_download`
 - `DeepTranslator.translate_file`
 - `EdgeTTS.srt_to_voice`
+- 元動画の声を使う翻訳音声は F5-TTS / CosyVoice / RVC 系を調査して追加する
 - `ffmpeg_replace_audio`
 - `ffmpeg_extract_audio`
 

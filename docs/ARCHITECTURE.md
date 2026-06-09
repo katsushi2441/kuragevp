@@ -36,4 +36,4 @@
 
 ## 注意
 
-TTS音声を字幕タイムスタンプへ完全同期するには、Voice-Proの `EdgeTTS.srt_to_voice()` や F5-TTS/CosyVoice の同期ロジックを直接利用する方向へ寄せる。初期版はまず成果物生成を優先する。
+TTS音声を字幕タイムスタンプへ完全同期するには、Voice-Proの `EdgeTTS.srt_to_voice()` や F5-TTS/CosyVoice の同期ロジックを直接利用する方向へ寄せる。初期版はまず成果物生成を優先し、音声は元動画の声ではなく Edge-TTS を使う。

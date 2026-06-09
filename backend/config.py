@@ -18,6 +18,12 @@ WHISPER_MODEL = os.environ.get("KURAGEVP_WHISPER_MODEL", "small")
 WHISPER_DEVICE = os.environ.get("KURAGEVP_WHISPER_DEVICE", "cuda")
 WHISPER_COMPUTE_TYPE = os.environ.get("KURAGEVP_WHISPER_COMPUTE_TYPE", "float16")
 FFMPEG_BIN = os.environ.get("KURAGEVP_FFMPEG_BIN", "/usr/bin/ffmpeg")
+SUBTITLE_STYLE = os.environ.get(
+    "KURAGEVP_SUBTITLE_STYLE",
+    "FontName=Noto Sans CJK JP,FontSize=30,PrimaryColour=&H00FFFFFF,"
+    "OutlineColour=&H00000000,BackColour=&H99000000,BorderStyle=3,"
+    "Outline=1,Shadow=0,Alignment=2,MarginV=58",
+)
 
 KURAGE_JOBS_DIR = Path(os.environ.get("KURAGE_JOBS_DIR", "/home/kojima/work/kurage/storage/jobs"))
 KURAGE_PUBLIC_BASE_URL = os.environ.get("KURAGE_PUBLIC_BASE_URL", "https://kurage.exbridge.jp").rstrip("/")

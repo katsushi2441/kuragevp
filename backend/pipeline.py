@@ -20,6 +20,7 @@ try:
         JOBS_DIR,
         KURAGE_JOBS_DIR,
         KURAGE_PUBLIC_BASE_URL,
+        SUBTITLE_STYLE,
         TMP_DIR,
         VOICE_PRO_DIR,
         WHISPER_COMPUTE_TYPE,
@@ -35,6 +36,7 @@ except ImportError:
         JOBS_DIR,
         KURAGE_JOBS_DIR,
         KURAGE_PUBLIC_BASE_URL,
+        SUBTITLE_STYLE,
         TMP_DIR,
         VOICE_PRO_DIR,
         WHISPER_COMPUTE_TYPE,
@@ -306,7 +308,7 @@ def srt_plain_text(srt_path: Path) -> str:
 
 def burn_subtitles(video: Path, translated_srt: Path, out_dir: Path) -> Path:
     out = out_dir / "subtitled.mp4"
-    vf = f"subtitles={translated_srt.as_posix()}:force_style='FontSize=22,Outline=2,Shadow=1'"
+    vf = f"subtitles={translated_srt.as_posix()}:force_style='{SUBTITLE_STYLE}'"
     run_cmd([FFMPEG_BIN, "-y", "-i", str(video), "-vf", vf, "-c:a", "copy", str(out)], timeout=3600)
     return out
 

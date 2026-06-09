@@ -40,9 +40,9 @@ Kurage Voice Pro (`kuragevp`) は、URLから動画を取得し、音声抽出�
 - 音声抽出/字幕焼き込み/音声差し替え: `ffmpeg`
 - 文字起こし: `faster-whisper` があれば使用。なければエラーとして依存追加を促す。
 - 翻訳: `deep-translator` があれば使用。
-- TTS: `edge-tts` があれば使用。
+- TTS: 現在の実装は `edge-tts` を使用する。元動画の声をクローンして翻訳音声を作る処理は未実装。
 
-voice-pro本体の関数は、依存が揃った段階で順次直接呼び出しへ寄せる。
+voice-pro本体の F5-TTS / CosyVoice / RVC 系を使うと元動画の声に寄せた翻訳音声へ拡張できるが、現時点では成果物生成を優先して Edge-TTS を使っている。
 
 ## 起動
 
