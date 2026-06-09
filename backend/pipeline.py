@@ -347,7 +347,10 @@ def split_caption_text(text: str, max_chars: int = 30) -> list[str]:
     if not text:
         return []
 
-    parts = [p for p in re.split(r"(?<=[。！？!?、,])", text) if p]
+    # Do not split on numeric thousands separators such as "1,000".
+    # Japanese commas and sentence punctuation are safe caption boundaries.
+    text = re.sub(r"(?<!\d),(?!\d)", "、", text)
+    parts = [p for p in re.split(r"(?<=[。！？!?、])", text) if p]
     chunks: list[str] = []
     current = ""
     for part in parts:
