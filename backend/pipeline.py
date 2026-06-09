@@ -116,6 +116,34 @@ def fetch_fxtwitter(tweet_id: str) -> dict[str, Any]:
     return data
 
 
+def source_metadata(source_url: str) -> dict[str, str]:
+    tweet_id = extract_tweet_id(source_url)
+    if not tweet_id or ("x.com/" not in source_url and "twitter.com/" not in source_url):
+        return {
+            "tweet_text": "Kurage Voice Proで生成した翻訳字幕・翻訳音声付き動画です。",
+            "tweet_author": "Kurage Voice Pro",
+            "tweet_author_name": "Kurage Voice Pro",
+        }
+    try:
+        data = fetch_fxtwitter(tweet_id)
+        tweet = data.get("tweet") if isinstance(data.get("tweet"), dict) else {}
+        author = tweet.get("author") if isinstance(tweet.get("author"), dict) else {}
+        screen_name = str(author.get("screen_name") or author.get("username") or "Kurage Voice Pro")
+        author_name = str(author.get("name") or screen_name)
+        text = str(tweet.get("text") or "").strip()
+        return {
+            "tweet_text": text or "Kurage Voice Proで生成した翻訳字幕・翻訳音声付き動画です。",
+            "tweet_author": "@" + screen_name if screen_name and not screen_name.startswith("@") else screen_name,
+            "tweet_author_name": author_name,
+        }
+    except Exception:
+        return {
+            "tweet_text": "Kurage Voice Proで生成した翻訳字幕・翻訳音声付き動画です。",
+            "tweet_author": "Kurage Voice Pro",
+            "tweet_author_name": "Kurage Voice Pro",
+        }
+
+
 def extract_best_video_url(fx_data: dict[str, Any]) -> str:
     tweet = fx_data.get("tweet") if isinstance(fx_data.get("tweet"), dict) else {}
     media = tweet.get("media") if isinstance(tweet.get("media"), dict) else {}
@@ -267,6 +295,13 @@ def tts_from_srt(translated_srt: Path, out_dir: Path, voice: str) -> Path:
     return out
 
 
+def srt_plain_text(srt_path: Path) -> str:
+    import pysubs2
+
+    subs = pysubs2.load(str(srt_path), encoding="utf-8")
+    return "\n".join(event.plaintext.strip() for event in subs if event.plaintext.strip())
+
+
 def burn_subtitles(video: Path, translated_srt: Path, out_dir: Path) -> Path:
     out = out_dir / "subtitled.mp4"
     vf = f"subtitles={translated_srt.as_posix()}:force_style='FontSize=22,Outline=2,Shadow=1'"
@@ -337,7 +372,7 @@ def make_thumbnail(video: Path, out: Path) -> Path:
     return out
 
 
-def publish_to_kurage(job_id: str, full_video: Path, translated_srt: Path, translated_audio: Path, source_url: str, target_lang: str) -> dict[str, str]:
+def publish_to_kurage(job_id: str, full_video: Path, translated_srt: Path, translated_audio: Path, source_url: str, target_lang: str, translated_text: str) -> dict[str, str]:
     public_dir = KURAGE_JOBS_DIR / job_id
     public_dir.mkdir(parents=True, exist_ok=True)
     output = public_dir / "output.mp4"
@@ -350,6 +385,7 @@ def publish_to_kurage(job_id: str, full_video: Path, translated_srt: Path, trans
 
     title = f"Kurage Voice Pro 翻訳動画 {target_lang.upper()}"
     created = now()
+    source = source_metadata(source_url)
     data = {
         "job_id": job_id,
         "status": "done",
@@ -358,9 +394,10 @@ def publish_to_kurage(job_id: str, full_video: Path, translated_srt: Path, trans
         "content_type": "voice_pro_translation",
         "title": title,
         "tweet_url": source_url,
-        "tweet_text": "Kurage Voice Proで生成した翻訳字幕・翻訳音声付き動画です。",
-        "tweet_author": "Kurage Voice Pro",
-        "tweet_author_name": "Kurage Voice Pro",
+        "tweet_text": source["tweet_text"],
+        "tweet_author": source["tweet_author"],
+        "tweet_author_name": source["tweet_author_name"],
+        "translated_text": translated_text,
         "video_file": str(output),
         "thumbnail_file": str(thumbnail),
         "translated_srt": str(translated_srt),
@@ -370,7 +407,7 @@ def publish_to_kurage(job_id: str, full_video: Path, translated_srt: Path, trans
         "updated_at": created,
         "script": {
             "title": title,
-            "scenes": [],
+            "scenes": [{"index": 0, "narration": translated_text, "image_prompt": ""}] if translated_text else [],
         },
         "kuragevp_job_id": job_id,
     }
@@ -402,6 +439,7 @@ def run_pipeline(job_id: str, url: str, source_lang: str, target_lang: str, tts_
 
         translated_srt = translate_srt(source_srt, out_dir, source_lang, target_lang)
         update_job(job_id, status="tts", progress=65, translated_srt=str(translated_srt), note="翻訳音声生成中")
+        translated_text = srt_plain_text(translated_srt)
 
         translated_audio = tts_from_srt(translated_srt, out_dir, tts_voice)
         update_job(job_id, status="rendering_subtitle", progress=78, translated_audio=str(translated_audio), note="翻訳字幕を動画に合成中")
@@ -412,7 +450,7 @@ def run_pipeline(job_id: str, url: str, source_lang: str, target_lang: str, tts_
         dubbed = replace_audio(video, translated_audio, out_dir)
         full = make_full_video(subtitled, translated_audio, out_dir)
         update_job(job_id, status="publishing", progress=95, note="Kurage動画として公開中")
-        kurage_public = publish_to_kurage(job_id, full, translated_srt, translated_audio, url, target_lang)
+        kurage_public = publish_to_kurage(job_id, full, translated_srt, translated_audio, url, target_lang, translated_text)
         update_job(
             job_id,
             status="done",
@@ -421,6 +459,7 @@ def run_pipeline(job_id: str, url: str, source_lang: str, target_lang: str, tts_
             dubbed_video=str(dubbed),
             final_video=str(full),
             video_file=str(full),
+            translated_text=translated_text,
             **kurage_public,
             completed_at=now(),
         )
