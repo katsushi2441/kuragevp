@@ -15,6 +15,7 @@ try:
     from .config import (
         DEFAULT_SOURCE_LANG,
         DEFAULT_TARGET_LANG,
+        DEFAULT_TTS_RATE,
         DEFAULT_TTS_VOICE,
         FFMPEG_BIN,
         JOBS_DIR,
@@ -31,6 +32,7 @@ except ImportError:
     from config import (
         DEFAULT_SOURCE_LANG,
         DEFAULT_TARGET_LANG,
+        DEFAULT_TTS_RATE,
         DEFAULT_TTS_VOICE,
         FFMPEG_BIN,
         JOBS_DIR,
@@ -268,14 +270,14 @@ def translate_srt(source_srt: Path, out_dir: Path, source_lang: str, target_lang
     return out
 
 
-async def _edge_tts(text: str, out: Path, voice: str) -> None:
+async def _edge_tts(text: str, out: Path, voice: str, rate: str) -> None:
     import edge_tts
 
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, rate=rate)
     await communicate.save(str(out))
 
 
-def tts_from_srt(translated_srt: Path, out_dir: Path, voice: str) -> Path:
+def tts_from_srt(translated_srt: Path, out_dir: Path, voice: str, rate: str = DEFAULT_TTS_RATE) -> Path:
     import pysubs2
 
     subs = pysubs2.load(str(translated_srt), encoding="utf-8")
@@ -288,7 +290,7 @@ def tts_from_srt(translated_srt: Path, out_dir: Path, voice: str) -> Path:
         if not text:
             continue
         mp3 = segments_dir / f"{i:05d}.mp3"
-        asyncio.run(_edge_tts(text, mp3, voice))
+        asyncio.run(_edge_tts(text, mp3, voice, rate))
         segment_files.append(mp3)
     concat_file.write_text("".join(f"file '{p.as_posix()}'\n" for p in segment_files), encoding="utf-8")
     out = out_dir / "translated_voice.m4a"
@@ -297,6 +299,23 @@ def tts_from_srt(translated_srt: Path, out_dir: Path, voice: str) -> Path:
     else:
         run_cmd([FFMPEG_BIN, "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "1", str(out)], timeout=60)
     return out
+
+
+def media_duration(path: Path) -> float:
+    output = run_cmd([
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ], timeout=60).strip()
+    try:
+        return max(0.0, float(output))
+    except ValueError:
+        return 0.0
 
 
 def srt_plain_text(srt_path: Path) -> str:
@@ -345,10 +364,14 @@ def wrap_caption_text(text: str, line_chars: int = 15) -> str:
     return r"\N".join(lines[:2])
 
 
-def make_kurage_ass(translated_srt: Path, out_dir: Path) -> Path:
+def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float | None = None) -> Path:
     import pysubs2
 
     source = pysubs2.load(str(translated_srt), encoding="utf-8")
+    source_duration = max((int(event.end) for event in source), default=0) / 1000.0
+    scale = 1.0
+    if target_duration and source_duration > 0:
+        scale = max(1.0, target_duration / source_duration)
     ass = pysubs2.SSAFile()
     ass.info["ScriptType"] = "v4.00+"
     ass.info["PlayResX"] = "576"
@@ -374,8 +397,8 @@ def make_kurage_ass(translated_srt: Path, out_dir: Path) -> Path:
         chunks = split_caption_text(event.plaintext, max_chars=30)
         if not chunks:
             continue
-        start = int(event.start)
-        end = int(event.end)
+        start = int(event.start * scale)
+        end = int(event.end * scale)
         duration = max(600, end - start)
         chunk_duration = max(650, duration // len(chunks))
         for index, chunk in enumerate(chunks):
@@ -397,9 +420,9 @@ def make_kurage_ass(translated_srt: Path, out_dir: Path) -> Path:
     return out
 
 
-def burn_subtitles(video: Path, translated_srt: Path, out_dir: Path) -> Path:
+def burn_subtitles(video: Path, translated_srt: Path, out_dir: Path, target_duration: float | None = None) -> Path:
     out = out_dir / "subtitled.mp4"
-    ass = make_kurage_ass(translated_srt, out_dir)
+    ass = make_kurage_ass(translated_srt, out_dir, target_duration=target_duration)
     filter_complex = (
         "[0:v]scale=576:1024:force_original_aspect_ratio=increase,"
         "crop=576:1024,boxblur=18:1,eq=brightness=-0.20[bg];"
@@ -410,23 +433,23 @@ def burn_subtitles(video: Path, translated_srt: Path, out_dir: Path) -> Path:
     run_cmd([
         FFMPEG_BIN,
         "-y",
+        "-stream_loop",
+        "-1",
         "-i",
         str(video),
+        "-t",
+        f"{target_duration:.3f}" if target_duration else f"{media_duration(video):.3f}",
         "-filter_complex",
         filter_complex,
         "-map",
         "[v]",
-        "-map",
-        "0:a?",
         "-c:v",
         "libx264",
         "-preset",
         "veryfast",
         "-crf",
         "20",
-        "-c:a",
-        "aac",
-        "-shortest",
+        "-an",
         str(out),
     ], timeout=3600)
     return out
@@ -565,9 +588,18 @@ def run_pipeline(job_id: str, url: str, source_lang: str, target_lang: str, tts_
         translated_text = srt_plain_text(translated_srt)
 
         translated_audio = tts_from_srt(translated_srt, out_dir, tts_voice)
-        update_job(job_id, status="rendering_subtitle", progress=78, translated_audio=str(translated_audio), note="翻訳字幕を動画に合成中")
+        audio_duration = media_duration(translated_audio)
+        update_job(
+            job_id,
+            status="rendering_subtitle",
+            progress=78,
+            translated_audio=str(translated_audio),
+            translated_audio_duration=audio_duration,
+            tts_rate=DEFAULT_TTS_RATE,
+            note="翻訳音声の長さに合わせて字幕を動画に合成中",
+        )
 
-        subtitled = burn_subtitles(video, translated_srt, out_dir)
+        subtitled = burn_subtitles(video, translated_srt, out_dir, target_duration=audio_duration)
         update_job(job_id, status="rendering_audio", progress=88, subtitled_video=str(subtitled), note="翻訳音声を動画に合成中")
 
         dubbed = replace_audio(video, translated_audio, out_dir)
