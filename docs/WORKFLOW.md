@@ -20,13 +20,13 @@
 
 作成済み:
 
-- `/home/kojima/exdirect/kuragevp`
-- `/home/kojima/exdirect/kuragevp/vendor/voice-pro`
-- `/home/kojima/exdirect/kuragevp/backend/main.py`
-- `/home/kojima/exdirect/kuragevp/backend/pipeline.py`
-- `/home/kojima/exdirect/kuragevp/web/kuragevp.php`
-- `/home/kojima/exdirect/kuragevp/web/auth_common.php`
-- `/home/kojima/exdirect/kuragevp/web/config.php`
+- `/home/kojima/work/kuragevp`
+- `/home/kojima/work/kuragevp/vendor/voice-pro`
+- `/home/kojima/work/kuragevp/backend/main.py`
+- `/home/kojima/work/kuragevp/backend/pipeline.py`
+- `/home/kojima/work/kuragevp/web/kuragevp.php`
+- `/home/kojima/work/kuragevp/web/auth_common.php`
+- `/home/kojima/work/kuragevp/web/config.php`
 
 確認済み:
 
@@ -86,17 +86,17 @@ XログインのOAuth入口は `kurage.exbridge.jp` には置かない。
 API:
 
 ```text
-http://exbridge.ddns.net:18202
+http://exbridge.ddns.net:18302
 ```
 
-ルーターで外部公開する場合は `18202` を開放する。
+ルーターで外部公開する場合は `18302` を開放する。
 
 生成完了後はKurage動画としても公開する。
 
 ```text
-/home/kojima/exdirect/kurage/storage/jobs/{job_id}.json
-/home/kojima/exdirect/kurage/storage/jobs/{job_id}/output.mp4
-/home/kojima/exdirect/kurage/storage/jobs/{job_id}/thumbnail.jpg
+/home/kojima/work/kurage/storage/jobs/{job_id}.json
+/home/kojima/work/kurage/storage/jobs/{job_id}/output.mp4
+/home/kojima/work/kurage/storage/jobs/{job_id}/thumbnail.jpg
 https://kurage.exbridge.jp/kuragev.php?id={job_id}
 ```
 
@@ -114,7 +114,7 @@ https://kurage.exbridge.jp/kuragev.php?id={job_id}
 KurageVPは `kurage.php` と同じ方式で動かす。
 
 - PHP: `web/kuragevp.php`
-- API: `http://exbridge.ddns.net:18202`
+- API: `http://exbridge.ddns.net:18302`
 - 登録: `POST /generate`
 - 進捗: `GET /status/{job_id}`
 - 成果物: `GET /file/{job_id}/{kind}`
@@ -129,7 +129,7 @@ RQDB4AIへenqueueする方式は使わない。
 成功確認済み:
 
 ```bash
-cd /home/kojima/exdirect/kuragevp
+cd /home/kojima/work/kuragevp
 SSH_AUTH_SOCK=/tmp/ssh-XXXXXX1CDlcM/agent.3865478 git push origin main
 ```
 

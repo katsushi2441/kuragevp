@@ -47,15 +47,15 @@ voice-pro本体の関数は、依存が揃った段階で順次直接呼び出�
 ## 起動
 
 ```bash
-cd /home/kojima/exdirect/kuragevp
+cd /home/kojima/work/kuragevp
 mkdir -p vendor
 git clone https://github.com/abus-aikorea/voice-pro.git vendor/voice-pro
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r backend/requirements.txt
-uvicorn backend.main:app --host 0.0.0.0 --port 18202
+uvicorn backend.main:app --host 0.0.0.0 --port 18302
 ```
 
 PHP側は `web/` 配下を `kurage.exbridge.jp` の公開ディレクトリ `/web/kurage_exbridge_jp` へ配置する。
 
-生成完了した翻訳字幕・翻訳音声付き動画は、Kurageの動画として `/home/kojima/exdirect/kurage/storage/jobs` に公開メタデータと動画ファイルを保存する。
+生成完了した翻訳字幕・翻訳音声付き動画は、Kurageの動画として `/home/kojima/work/kurage/storage/jobs` に公開メタデータと動画ファイルを保存する。

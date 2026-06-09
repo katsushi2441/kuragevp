@@ -9,10 +9,10 @@
 ## サーバ構成
 
 - PHP画面: `kurage.exbridge.jp/kuragevp.php`
-- Python API: `http://exbridge.ddns.net:18202`
-- ローカル作業ディレクトリ: `/home/kojima/exdirect/kuragevp`
+- Python API: `http://exbridge.ddns.net:18302`
+- ローカル作業ディレクトリ: `/home/kojima/work/kuragevp`
 - 公開先: heteml `/web/kurage_exbridge_jp`
-- Kurage動画公開先: `/home/kojima/exdirect/kurage/storage/jobs`
+- Kurage動画公開先: `/home/kojima/work/kurage/storage/jobs`
 
 ## 初期API
 

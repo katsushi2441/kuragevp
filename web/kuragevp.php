@@ -5,7 +5,7 @@ date_default_timezone_set('Asia/Tokyo');
 
 $THIS_FILE = 'kuragevp.php';
 $SITE_NAME = 'Kurage Voice Pro';
-$KURAGEVP_API = rtrim(getenv('KURAGEVP_API') ?: 'http://exbridge.ddns.net:18202', '/');
+$KURAGEVP_API = rtrim(getenv('KURAGEVP_API') ?: 'http://exbridge.ddns.net:18302', '/');
 
 if (isset($_GET['kvp_logout'])) {
     header('Location: ' . url2ai_auth_logout_url('/' . $THIS_FILE));

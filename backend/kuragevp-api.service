@@ -4,12 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/kojima/exdirect/kuragevp
-Environment=KURAGEVP_PORT=18202
-ExecStart=/home/kojima/exdirect/kuragevp/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 18202
+WorkingDirectory=/home/kojima/work/kuragevp
+Environment=KURAGEVP_PORT=18302
+Environment=KURAGEVP_ROOT=/home/kojima/work/kuragevp
+Environment=KURAGE_JOBS_DIR=/home/kojima/work/kurage/storage/jobs
+ExecStart=/home/kojima/work/kuragevp/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 18302
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=default.target
-
