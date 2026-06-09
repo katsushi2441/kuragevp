@@ -15,6 +15,8 @@ DEFAULT_SOURCE_LANG = os.environ.get("KURAGEVP_SOURCE_LANG", "auto")
 DEFAULT_TARGET_LANG = os.environ.get("KURAGEVP_TARGET_LANG", "ja")
 DEFAULT_TTS_VOICE = os.environ.get("KURAGEVP_TTS_VOICE", "ja-JP-NanamiNeural")
 WHISPER_MODEL = os.environ.get("KURAGEVP_WHISPER_MODEL", "small")
+WHISPER_DEVICE = os.environ.get("KURAGEVP_WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE_TYPE = os.environ.get("KURAGEVP_WHISPER_COMPUTE_TYPE", "int8")
 
 KURAGE_JOBS_DIR = Path(os.environ.get("KURAGE_JOBS_DIR", "/home/kojima/exdirect/kurage/storage/jobs"))
 KURAGE_PUBLIC_BASE_URL = os.environ.get("KURAGE_PUBLIC_BASE_URL", "https://kurage.exbridge.jp").rstrip("/")

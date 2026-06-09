@@ -21,6 +21,8 @@ try:
         KURAGE_PUBLIC_BASE_URL,
         TMP_DIR,
         VOICE_PRO_DIR,
+        WHISPER_COMPUTE_TYPE,
+        WHISPER_DEVICE,
         WHISPER_MODEL,
     )
 except ImportError:
@@ -33,6 +35,8 @@ except ImportError:
         KURAGE_PUBLIC_BASE_URL,
         TMP_DIR,
         VOICE_PRO_DIR,
+        WHISPER_COMPUTE_TYPE,
+        WHISPER_DEVICE,
         WHISPER_MODEL,
     )
 
@@ -191,7 +195,7 @@ def extract_audio(video: Path, out_dir: Path) -> Path:
 def transcribe_audio(audio: Path, out_dir: Path, source_lang: str) -> tuple[Path, Path]:
     from faster_whisper import WhisperModel
 
-    model = WhisperModel(WHISPER_MODEL, device="auto", compute_type="auto")
+    model = WhisperModel(WHISPER_MODEL, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE_TYPE)
     lang = None if source_lang == "auto" else source_lang
     segments, info = model.transcribe(str(audio), language=lang, vad_filter=True)
     srt = out_dir / "source.srt"
