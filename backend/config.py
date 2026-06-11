@@ -4,6 +4,16 @@ import os
 from pathlib import Path
 
 
+def env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 ROOT_DIR = Path(os.environ.get("KURAGEVP_ROOT", Path(__file__).resolve().parents[1]))
 STORAGE_DIR = Path(os.environ.get("KURAGEVP_STORAGE", ROOT_DIR / "storage"))
 JOBS_DIR = STORAGE_DIR / "jobs"
@@ -15,6 +25,7 @@ DEFAULT_SOURCE_LANG = os.environ.get("KURAGEVP_SOURCE_LANG", "auto")
 DEFAULT_TARGET_LANG = os.environ.get("KURAGEVP_TARGET_LANG", "ja")
 DEFAULT_TTS_VOICE = os.environ.get("KURAGEVP_TTS_VOICE", "ja-JP-NanamiNeural")
 DEFAULT_TTS_RATE = os.environ.get("KURAGEVP_TTS_RATE", "+22%")
+TRANSLATED_AUDIO_VOLUME = max(0.1, min(env_float("KURAGEVP_TRANSLATED_AUDIO_VOLUME", 1.35), 3.0))
 WHISPER_MODEL = os.environ.get("KURAGEVP_WHISPER_MODEL", "small")
 WHISPER_DEVICE = os.environ.get("KURAGEVP_WHISPER_DEVICE", "cuda")
 WHISPER_COMPUTE_TYPE = os.environ.get("KURAGEVP_WHISPER_COMPUTE_TYPE", "float16")

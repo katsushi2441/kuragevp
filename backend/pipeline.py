@@ -23,6 +23,7 @@ try:
         KURAGE_PUBLIC_BASE_URL,
         SUBTITLE_STYLE,
         TMP_DIR,
+        TRANSLATED_AUDIO_VOLUME,
         VOICE_PRO_DIR,
         WHISPER_COMPUTE_TYPE,
         WHISPER_DEVICE,
@@ -40,6 +41,7 @@ except ImportError:
         KURAGE_PUBLIC_BASE_URL,
         SUBTITLE_STYLE,
         TMP_DIR,
+        TRANSLATED_AUDIO_VOLUME,
         VOICE_PRO_DIR,
         WHISPER_COMPUTE_TYPE,
         WHISPER_DEVICE,
@@ -599,7 +601,7 @@ def burn_subtitles(
 def replace_audio(video: Path, translated_audio: Path, out_dir: Path) -> Path:
     out = out_dir / "dubbed.mp4"
     duration = media_duration(video)
-    run_cmd([
+    cmd = [
         FFMPEG_BIN,
         "-y",
         "-i",
@@ -614,17 +616,22 @@ def replace_audio(video: Path, translated_audio: Path, out_dir: Path) -> Path:
         "copy",
         "-c:a",
         "aac",
+    ]
+    if TRANSLATED_AUDIO_VOLUME != 1.0:
+        cmd.extend(["-filter:a:0", f"volume={TRANSLATED_AUDIO_VOLUME:.3f}"])
+    cmd.extend([
         "-t",
         f"{duration:.3f}",
         str(out),
-    ], timeout=3600)
+    ])
+    run_cmd(cmd, timeout=3600)
     return out
 
 
 def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path) -> Path:
     out = out_dir / "translated_subtitled_dubbed.mp4"
     duration = media_duration(subtitled_video)
-    run_cmd([
+    cmd = [
         FFMPEG_BIN,
         "-y",
         "-i",
@@ -639,10 +646,15 @@ def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path
         "copy",
         "-c:a",
         "aac",
+    ]
+    if TRANSLATED_AUDIO_VOLUME != 1.0:
+        cmd.extend(["-filter:a:0", f"volume={TRANSLATED_AUDIO_VOLUME:.3f}"])
+    cmd.extend([
         "-t",
         f"{duration:.3f}",
         str(out),
-    ], timeout=3600)
+    ])
+    run_cmd(cmd, timeout=3600)
     return out
 
 
@@ -743,6 +755,7 @@ def run_pipeline(job_id: str, url: str, source_lang: str, target_lang: str, tts_
             translated_audio_duration=audio_duration,
             source_video_duration=video_duration,
             tts_rate=DEFAULT_TTS_RATE,
+            translated_audio_volume=TRANSLATED_AUDIO_VOLUME,
             note="元動画のタイムラインに合わせて字幕を動画に合成中",
         )
 
