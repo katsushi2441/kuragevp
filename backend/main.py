@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 try:
@@ -21,6 +22,23 @@ except ImportError:
 
 app = FastAPI(title="Kurage Voice Pro API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+def allowed_client_ips() -> set[str]:
+    raw = os.environ.get("KURAGEVP_ALLOWED_CLIENT_IPS", "").strip()
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+@app.middleware("http")
+async def restrict_client_ip(request: Request, call_next):
+    allowed = allowed_client_ips()
+    client_host = request.client.host if request.client else ""
+    if allowed and client_host not in allowed:
+        return JSONResponse(
+            {"ok": False, "error": "forbidden", "client": client_host},
+            status_code=403,
+        )
+    return await call_next(request)
 
 
 class GenerateRequest(BaseModel):
