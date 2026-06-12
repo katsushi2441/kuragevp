@@ -435,6 +435,31 @@ def media_duration(path: Path) -> float:
         return 0.0
 
 
+def video_stream_count(path: Path) -> int:
+    output = run_cmd([
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v",
+        "-show_entries",
+        "stream=index",
+        "-of",
+        "csv=p=0",
+        str(path),
+    ], timeout=60).strip()
+    return len([line for line in output.splitlines() if line.strip()])
+
+
+def ensure_rendered_video(path: Path, label: str) -> None:
+    if not path.exists() or path.stat().st_size < 1024:
+        raise RuntimeError(f"{label} video is empty or broken: {path}")
+    if video_stream_count(path) <= 0:
+        raise RuntimeError(f"{label} video has no video stream: {path}")
+    if media_duration(path) <= 0:
+        raise RuntimeError(f"{label} video has no duration: {path}")
+
+
 def srt_plain_text(srt_path: Path) -> str:
     import pysubs2
 
@@ -595,6 +620,7 @@ def burn_subtitles(
         "-an",
         str(out),
     ], timeout=3600)
+    ensure_rendered_video(out, "subtitled")
     return out
 
 
@@ -625,6 +651,7 @@ def replace_audio(video: Path, translated_audio: Path, out_dir: Path) -> Path:
         str(out),
     ])
     run_cmd(cmd, timeout=3600)
+    ensure_rendered_video(out, "dubbed")
     return out
 
 
@@ -655,6 +682,7 @@ def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path
         str(out),
     ])
     run_cmd(cmd, timeout=3600)
+    ensure_rendered_video(out, "translated subtitled dubbed")
     return out
 
 
@@ -733,6 +761,7 @@ def run_pipeline(job_id: str, url: str, source_lang: str, target_lang: str, tts_
         update_job(job_id, status="downloading", progress=5, note="動画取得中")
         video = download_video(url, out_dir)
         update_job(job_id, status="extracting_audio", progress=15, source_video=str(video), note="音声抽出中")
+        ensure_rendered_video(video, "source")
 
         audio = extract_audio(video, out_dir)
         update_job(job_id, status="transcribing", progress=30, audio_file=str(audio), note="音声テキスト化中")
