@@ -46,6 +46,9 @@ class GenerateRequest(BaseModel):
     source_lang: str = DEFAULT_SOURCE_LANG
     target_lang: str = DEFAULT_TARGET_LANG
     tts_voice: str = DEFAULT_TTS_VOICE
+    original_url: str = ""
+    source_title: str = ""
+    source_platform: str = ""
 
 
 @app.get("/health")
@@ -73,9 +76,21 @@ def generate(req: GenerateRequest):
         source_lang=req.source_lang,
         target_lang=req.target_lang,
         tts_voice=req.tts_voice,
+        original_url=req.original_url.strip(),
+        source_title=req.source_title.strip(),
+        source_platform=req.source_platform.strip(),
         created_at=time.strftime("%Y-%m-%d %H:%M:%S"),
     )
-    t = threading.Thread(target=run_pipeline, args=(job_id, url, req.source_lang, req.target_lang, req.tts_voice), daemon=True)
+    t = threading.Thread(
+        target=run_pipeline,
+        args=(job_id, url, req.source_lang, req.target_lang, req.tts_voice),
+        kwargs={
+            "original_url": req.original_url.strip(),
+            "source_title": req.source_title.strip(),
+            "source_platform": req.source_platform.strip(),
+        },
+        daemon=True,
+    )
     t.start()
     return {"ok": True, "job_id": job_id}
 
