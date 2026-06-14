@@ -14,6 +14,16 @@ def env_float(name: str, default: float) -> float:
         return default
 
 
+def env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 ROOT_DIR = Path(os.environ.get("KURAGEVP_ROOT", Path(__file__).resolve().parents[1]))
 STORAGE_DIR = Path(os.environ.get("KURAGEVP_STORAGE", ROOT_DIR / "storage"))
 JOBS_DIR = STORAGE_DIR / "jobs"
@@ -32,10 +42,19 @@ WHISPER_COMPUTE_TYPE = os.environ.get("KURAGEVP_WHISPER_COMPUTE_TYPE", "float16"
 FFMPEG_BIN = os.environ.get("KURAGEVP_FFMPEG_BIN", "/usr/bin/ffmpeg")
 SUBTITLE_STYLE = os.environ.get(
     "KURAGEVP_SUBTITLE_STYLE",
-    "FontName=Noto Sans CJK JP,FontSize=36,PrimaryColour=&H00FFFFFF,"
+    "FontName=Noto Sans CJK JP,FontSize=34,PrimaryColour=&H00FFFFFF,"
     "OutlineColour=&H00000000,BackColour=&H70000000,BorderStyle=1,"
-    "Bold=-1,Outline=4,Shadow=2,Alignment=2,MarginL=34,MarginR=34,MarginV=86",
+    "Bold=-1,Outline=4,Shadow=2,Alignment=2,MarginL=16,MarginR=16,MarginV=72",
 )
+SUBTITLE_FONT_SIZE = env_int("KURAGEVP_SUBTITLE_FONT_SIZE", 34)
+SUBTITLE_MARGIN_L = env_int("KURAGEVP_SUBTITLE_MARGIN_L", 16)
+SUBTITLE_MARGIN_R = env_int("KURAGEVP_SUBTITLE_MARGIN_R", 16)
+SUBTITLE_MARGIN_V = env_int("KURAGEVP_SUBTITLE_MARGIN_V", 72)
+SUBTITLE_CJK_LINE_CHARS = env_int("KURAGEVP_SUBTITLE_CJK_LINE_CHARS", 17)
+SUBTITLE_CJK_MAX_CHARS = env_int("KURAGEVP_SUBTITLE_CJK_MAX_CHARS", 34)
+SUBTITLE_LATIN_LINE_CHARS = env_int("KURAGEVP_SUBTITLE_LATIN_LINE_CHARS", 42)
+SUBTITLE_LATIN_MAX_CHARS = env_int("KURAGEVP_SUBTITLE_LATIN_MAX_CHARS", 120)
+SUBTITLE_MAX_LINES = env_int("KURAGEVP_SUBTITLE_MAX_LINES", 3)
 
 KURAGE_JOBS_DIR = Path(os.environ.get("KURAGE_JOBS_DIR", "/home/kojima/work/kurage/storage/jobs"))
 KURAGE_PUBLIC_BASE_URL = os.environ.get("KURAGE_PUBLIC_BASE_URL", "https://kurage.exbridge.jp").rstrip("/")

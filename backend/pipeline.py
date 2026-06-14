@@ -22,7 +22,15 @@ try:
         JOBS_DIR,
         KURAGE_JOBS_DIR,
         KURAGE_PUBLIC_BASE_URL,
-        SUBTITLE_STYLE,
+        SUBTITLE_CJK_LINE_CHARS,
+        SUBTITLE_CJK_MAX_CHARS,
+        SUBTITLE_FONT_SIZE,
+        SUBTITLE_LATIN_LINE_CHARS,
+        SUBTITLE_LATIN_MAX_CHARS,
+        SUBTITLE_MARGIN_L,
+        SUBTITLE_MARGIN_R,
+        SUBTITLE_MARGIN_V,
+        SUBTITLE_MAX_LINES,
         TMP_DIR,
         TRANSLATED_AUDIO_VOLUME,
         VOICE_PRO_DIR,
@@ -40,7 +48,15 @@ except ImportError:
         JOBS_DIR,
         KURAGE_JOBS_DIR,
         KURAGE_PUBLIC_BASE_URL,
-        SUBTITLE_STYLE,
+        SUBTITLE_CJK_LINE_CHARS,
+        SUBTITLE_CJK_MAX_CHARS,
+        SUBTITLE_FONT_SIZE,
+        SUBTITLE_LATIN_LINE_CHARS,
+        SUBTITLE_LATIN_MAX_CHARS,
+        SUBTITLE_MARGIN_L,
+        SUBTITLE_MARGIN_R,
+        SUBTITLE_MARGIN_V,
+        SUBTITLE_MAX_LINES,
         TMP_DIR,
         TRANSLATED_AUDIO_VOLUME,
         VOICE_PRO_DIR,
@@ -510,24 +526,64 @@ def public_title_from_source(source: dict[str, str], target_lang: str) -> str:
     return title[:48]
 
 
-def split_caption_text(text: str, max_chars: int = 30) -> list[str]:
+def is_latin_caption(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text or "")
+    if not compact:
+        return False
+    latin = len(re.findall(r"[A-Za-z0-9]", compact))
+    cjk = len(re.findall(r"[\u3040-\u30ff\u3400-\u9fff]", compact))
+    return latin > cjk
+
+
+def split_long_latin_text(text: str, max_chars: int) -> list[str]:
+    chunks: list[str] = []
+    current = ""
+    for word in text.split():
+        if len(word) > max_chars:
+            if current:
+                chunks.append(current.strip())
+                current = ""
+            chunks.append(word[: max_chars - 1].rstrip() + "…")
+            continue
+        candidate = word if not current else current + " " + word
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current.strip())
+        current = word
+    if current:
+        chunks.append(current.strip())
+    return chunks
+
+
+def split_caption_text(text: str, max_chars: int | None = None, latin: bool | None = None) -> list[str]:
     text = re.sub(r"\s+", " ", (text or "").strip())
     if not text:
         return []
+    latin = is_latin_caption(text) if latin is None else latin
+    max_chars = max_chars or (SUBTITLE_LATIN_MAX_CHARS if latin else SUBTITLE_CJK_MAX_CHARS)
 
     # Do not split on numeric thousands separators such as "1,000".
     # Japanese commas and sentence punctuation are safe caption boundaries.
-    text = re.sub(r"(?<!\d),(?!\d)", "、", text)
-    parts = [p for p in re.split(r"(?<=[。！？!?、])", text) if p]
+    if not latin:
+        text = re.sub(r"(?<!\d),(?!\d)", "、", text)
+    parts = [p for p in re.split(r"(?<=[。！？!?、,.])\s*", text) if p]
     chunks: list[str] = []
     current = ""
     for part in parts:
-        if len(current) + len(part) <= max_chars:
-            current += part
+        separator = " " if latin and current else ""
+        if len(current) + len(separator) + len(part) <= max_chars:
+            current += separator + part
             continue
         if current:
             chunks.append(current.strip())
         while len(part) > max_chars:
+            if latin:
+                split_parts = split_long_latin_text(part, max_chars)
+                chunks.extend(split_parts[:-1])
+                part = split_parts[-1] if split_parts else ""
+                break
             chunks.append(part[:max_chars].strip())
             part = part[max_chars:]
         current = part
@@ -536,10 +592,38 @@ def split_caption_text(text: str, max_chars: int = 30) -> list[str]:
     return chunks
 
 
-def wrap_caption_text(text: str, line_chars: int = 15) -> str:
+def wrap_latin_caption_text(text: str, line_chars: int, max_lines: int) -> str:
+    words = text.split()
+    if not words:
+        return ""
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = word if not current else current + " " + word
+        if len(candidate) <= line_chars:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+        current = word
+        if len(lines) >= max_lines - 1:
+            break
+    if current and len(lines) < max_lines:
+        remaining = words[sum(len(line.split()) for line in lines):]
+        tail = " ".join(remaining)
+        lines.append(tail if len(tail) <= line_chars else tail[: line_chars - 1].rstrip() + "…")
+    return r"\N".join(lines[:max_lines])
+
+
+def wrap_caption_text(text: str, line_chars: int | None = None, max_lines: int | None = None, latin: bool | None = None) -> str:
     text = text.strip()
+    latin = is_latin_caption(text) if latin is None else latin
+    line_chars = line_chars or (SUBTITLE_LATIN_LINE_CHARS if latin else SUBTITLE_CJK_LINE_CHARS)
+    max_lines = max_lines or SUBTITLE_MAX_LINES
     if len(text) <= line_chars:
         return text
+    if latin:
+        return wrap_latin_caption_text(text, line_chars, max_lines)
     lines: list[str] = []
     current = ""
     for ch in text:
@@ -549,7 +633,7 @@ def wrap_caption_text(text: str, line_chars: int = 15) -> str:
             current = ""
     if current:
         lines.append(current)
-    return r"\N".join(lines[:2])
+    return r"\N".join(lines[:max_lines])
 
 
 def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float | None = None) -> Path:
@@ -564,10 +648,10 @@ def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float 
     ass.info["ScriptType"] = "v4.00+"
     ass.info["PlayResX"] = "576"
     ass.info["PlayResY"] = "1024"
-    ass.info["WrapStyle"] = "0"
+    ass.info["WrapStyle"] = "2"
     ass.styles["Default"] = pysubs2.SSAStyle(
         fontname="Noto Sans CJK JP",
-        fontsize=36,
+        fontsize=SUBTITLE_FONT_SIZE,
         primarycolor=pysubs2.Color(255, 255, 255, 0),
         outlinecolor=pysubs2.Color(0, 0, 0, 0),
         backcolor=pysubs2.Color(0, 0, 0, 120),
@@ -576,13 +660,14 @@ def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float 
         outline=4,
         shadow=2,
         alignment=2,
-        marginl=34,
-        marginr=34,
-        marginv=86,
+        marginl=SUBTITLE_MARGIN_L,
+        marginr=SUBTITLE_MARGIN_R,
+        marginv=SUBTITLE_MARGIN_V,
     )
 
     for event in source:
-        chunks = split_caption_text(event.plaintext, max_chars=30)
+        latin = is_latin_caption(event.plaintext)
+        chunks = split_caption_text(event.plaintext, latin=latin)
         if not chunks:
             continue
         start = int(event.start * scale)
@@ -598,7 +683,7 @@ def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float 
                 pysubs2.SSAEvent(
                     start=ev_start,
                     end=ev_end,
-                    text=wrap_caption_text(chunk),
+                    text=wrap_caption_text(chunk, latin=latin),
                     style="Default",
                 )
             )
