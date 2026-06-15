@@ -508,22 +508,130 @@ def srt_plain_text(srt_path: Path) -> str:
     return "\n".join(event.plaintext.strip() for event in subs if event.plaintext.strip())
 
 
-def public_title_from_source(source: dict[str, str], target_lang: str) -> str:
+def first_content_line(text: str) -> str:
+    return next((line.strip() for line in (text or "").splitlines() if line.strip()), "")
+
+
+def translate_plain_text(text: str, target_lang: str, limit: int = 900) -> str:
+    text = re.sub(r"\s+", " ", (text or "").strip())
+    if not text:
+        return ""
+    if len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0] or text[:limit]
+    try:
+        from deep_translator import GoogleTranslator
+
+        return (GoogleTranslator(source="auto", target=target_lang).translate(text) or text).strip()
+    except Exception:
+        return text
+
+
+def smart_truncate(text: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", (text or "").strip())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rstrip()
+    if re.search(r"[A-Za-z0-9]$", cut):
+        word_cut = re.sub(r"\s+\S*$", "", cut).strip()
+        if len(word_cut) >= max(12, limit // 2):
+            return word_cut
+    return cut
+
+
+def mode_label(target_lang: str, audio_mode: str) -> str:
+    lang = (target_lang or "").lower()
+    subtitle_only = audio_mode == "subtitle_only"
+    if lang.startswith("en"):
+        return "English Subtitles" if subtitle_only else "English Dub/Subtitles"
+    if lang.startswith("ja"):
+        return "日本語字幕" if subtitle_only else "日本語吹替・日本語字幕"
+    if lang.startswith("ko"):
+        return "한국어 자막" if subtitle_only else "한국어 더빙/자막"
+    if lang.startswith("zh"):
+        return "中文字幕" if subtitle_only else "中文配音/字幕"
+    label = target_lang.upper() if target_lang else "Translated"
+    return f"{label} Subtitles" if subtitle_only else f"{label} Dub/Subtitles"
+
+
+def title_suffix(target_lang: str, audio_mode: str) -> str:
+    lang = (target_lang or "").lower()
+    label = mode_label(target_lang, audio_mode)
+    if lang.startswith(("ja", "zh")):
+        return f"【{label}】"
+    return f"[{label}]"
+
+
+def target_language_name(target_lang: str) -> str:
+    lang = (target_lang or "").lower()
+    if lang.startswith("en"):
+        return "English"
+    if lang.startswith("ja"):
+        return "日本語"
+    if lang.startswith("ko"):
+        return "한국어"
+    if lang.startswith("zh"):
+        return "中文"
+    return target_lang.upper() if target_lang else "Translation"
+
+
+def secondary_language_name(target_lang: str) -> str:
+    lang = (target_lang or "").lower()
+    if lang.startswith("en"):
+        return "日本語"
+    if lang.startswith("ja"):
+        return "English"
+    if lang.startswith("ko"):
+        return "日本語"
+    if lang.startswith("zh"):
+        return "日本語"
+    return "Original"
+
+
+def public_title_from_source(source: dict[str, str], target_lang: str, audio_mode: str = "dubbed") -> str:
     text = (source.get("source_title") or source.get("tweet_text") or "").strip()
-    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    first_line = first_content_line(text)
     if not first_line:
         platform = (source.get("source_platform") or "元動画").strip()
-        return f"{platform} 翻訳動画 {target_lang.upper()}"
+        first_line = f"{platform} translation video"
     title = first_line
     if target_lang == "ja" and re.search(r"[A-Za-z]", title):
-        try:
-            from deep_translator import GoogleTranslator
-
-            title = GoogleTranslator(source="auto", target="ja").translate(title) or title
-        except Exception:
-            pass
+        title = translate_plain_text(title, "ja", limit=160)
+    elif target_lang.startswith("en") and re.search(r"[\u3040-\u30ff\u3400-\u9fff]", title):
+        title = translate_plain_text(title, "en", limit=160)
     title = re.sub(r"\s+", " ", title).strip()
-    return title[:48]
+    suffix = title_suffix(target_lang, audio_mode)
+    max_title_len = max(20, 72 - len(suffix))
+    return f"{smart_truncate(title, max_title_len)} {suffix}"
+
+
+def description_pair(source: dict[str, str], target_lang: str, translated_text: str) -> tuple[str, str, str]:
+    primary = (translated_text or "").strip()
+    original = (source.get("source_title") or source.get("tweet_text") or "").strip()
+    if not original:
+        original = source.get("tweet_text", "").strip()
+    lang = (target_lang or "").lower()
+    if lang.startswith("en"):
+        secondary = original
+        if secondary and not re.search(r"[\u3040-\u30ff\u3400-\u9fff]", secondary):
+            secondary = translate_plain_text(secondary, "ja")
+    elif lang.startswith("ja"):
+        secondary = original
+        if secondary and not re.search(r"[A-Za-z]", secondary):
+            secondary = translate_plain_text(secondary, "en")
+    else:
+        secondary = original
+    return primary, secondary, original
+
+
+def bilingual_display_summary(target_lang: str, primary: str, secondary: str) -> str:
+    primary = primary.strip()
+    secondary = secondary.strip()
+    if not secondary:
+        return primary
+    return (
+        f"{target_language_name(target_lang)}:\n{primary}\n\n"
+        f"{secondary_language_name(target_lang)}:\n{secondary}"
+    ).strip()
 
 
 def is_latin_caption(text: str) -> bool:
@@ -866,7 +974,11 @@ def publish_to_kurage(
     created = now()
     display_source_url = (original_url or source_url or "").strip()
     source = source_metadata(display_source_url, source_title, source_platform)
-    title = public_title_from_source(source, target_lang)
+    audio_mode = "subtitle_only" if not translated_audio else "dubbed"
+    title = public_title_from_source(source, target_lang, audio_mode)
+    primary_desc, secondary_desc, original_desc = description_pair(source, target_lang, translated_text)
+    display_summary = bilingual_display_summary(target_lang, primary_desc, secondary_desc)
+    voice_label = mode_label(target_lang, audio_mode)
     data = {
         "job_id": job_id,
         "status": "done",
@@ -877,7 +989,7 @@ def publish_to_kurage(
         "display_title": title,
         "summary_title": title,
         "tweet_url": display_source_url,
-        "tweet_text": title,
+        "tweet_text": primary_desc or title,
         "tweet_author": source["tweet_author"],
         "tweet_author_name": source["tweet_author_name"],
         "source_url": display_source_url,
@@ -885,8 +997,16 @@ def publish_to_kurage(
         "source_platform": source["source_platform"],
         "original_url": display_source_url,
         "source_media_path": source_url if source_url != display_source_url else "",
-        "audio_mode": "subtitle_only" if not translated_audio else "dubbed",
-        "summary": title,
+        "audio_mode": audio_mode,
+        "voice_pro_label": voice_label,
+        "summary": primary_desc or title,
+        "display_summary": display_summary,
+        "copy_summary": primary_desc or title,
+        "primary_description": primary_desc,
+        "secondary_description": secondary_desc,
+        "original_description": original_desc,
+        "target_language_name": target_language_name(target_lang),
+        "secondary_language_name": secondary_language_name(target_lang),
         "article_url": "",
         "translated_text": translated_text,
         "video_file": str(output),
