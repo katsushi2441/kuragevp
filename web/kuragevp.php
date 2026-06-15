@@ -120,7 +120,7 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:14px 20px;d
 .userbar{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}.btn-sm{border:1px solid var(--border);border-radius:6px;padding:5px 10px;text-decoration:none;color:var(--muted);background:#fff}
 .wrap{max-width:980px;margin:0 auto;padding:24px}.hero{padding:28px 0 16px}.hero h1{font-size:28px;margin:0 0 8px}.hero p{color:var(--muted);line-height:1.8;margin:0;max-width:760px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin:16px 0;box-shadow:0 2px 10px rgba(15,35,45,.04)}.card h2{font-size:14px;margin:0;padding:12px 16px;border-bottom:1px solid var(--border);color:var(--muted);letter-spacing:.04em;text-transform:uppercase}.body{padding:16px}
-.row{display:grid;grid-template-columns:1fr 140px 140px;gap:10px}.row2{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.row{display:grid;grid-template-columns:1fr 140px 170px 140px;gap:10px}.row2{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 input,select{width:100%;border:1px solid #c9d8dd;border-radius:8px;padding:11px 12px;font:inherit;background:#fff}button{border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;padding:11px 18px;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
 .status{display:none}.bar{height:8px;background:#e3ecef;border-radius:999px;overflow:hidden;margin:12px 0}.fill{height:100%;background:linear-gradient(90deg,var(--accent),#2f8f45);width:0;transition:width .25s}.note{color:var(--muted);line-height:1.8}.badge{display:inline-block;border-radius:999px;padding:4px 9px;background:#e8f6f8;color:var(--accent);font-weight:800;font-size:12px}
 .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.links a{border:1px solid var(--border);border-radius:7px;padding:7px 10px;text-decoration:none;color:var(--accent);background:#fff;font-weight:700}
@@ -162,9 +162,14 @@ input,select{width:100%;border:1px solid #c9d8dd;border-radius:8px;padding:11px 
             <option value="ko">한국어</option>
             <option value="zh-CN">中文</option>
           </select>
+          <select id="audio_mode">
+            <option value="dubbed">翻訳音声+字幕</option>
+            <option value="subtitle_only">元音声+翻訳字幕</option>
+          </select>
           <select id="voice">
             <option value="ja-JP-NanamiNeural">Nanami JP</option>
             <option value="ja-JP-KeitaNeural">Keita JP</option>
+            <option value="en-US-GuyNeural">Guy EN</option>
             <option value="en-US-JennyNeural">Jenny EN</option>
             <option value="ko-KR-SunHiNeural">SunHi KO</option>
           </select>
@@ -212,12 +217,17 @@ async function watch(jobId){
   const outputs = qs('#outputs');
   outputs.innerHTML = '';
   if(d.status === 'done'){
-    outputs.innerHTML = [
+    const links = [
       ['翻訳字幕','translated_srt'],
-      ['翻訳音声','translated_audio'],
-      ['吹き替え動画','dubbed_video'],
-      ['字幕+吹き替え動画','final_video']
-    ].map(x=>`<a target="_blank" href="?proxy=file&job_id=${encodeURIComponent(jobId)}&kind=${x[1]}">${x[0]}</a>`).join('');
+    ];
+    if(d.audio_mode !== 'subtitle_only'){
+      links.push(['翻訳音声','translated_audio']);
+      links.push(['吹き替え動画','dubbed_video']);
+      links.push(['字幕+吹き替え動画','final_video']);
+    } else {
+      links.push(['元音声+翻訳字幕動画','final_video']);
+    }
+    outputs.innerHTML = links.map(x=>`<a target="_blank" href="?proxy=file&job_id=${encodeURIComponent(jobId)}&kind=${x[1]}">${x[0]}</a>`).join('');
     if(d.kurage_url){
       outputs.innerHTML += `<a target="_blank" href="${esc(d.kurage_url)}">Kurage公開ページ</a>`;
     }
@@ -226,12 +236,18 @@ async function watch(jobId){
   }
 }
 if(isAdmin){
+  function syncAudioMode(){
+    const subtitleOnly = qs('#audio_mode').value === 'subtitle_only';
+    qs('#voice').disabled = subtitleOnly;
+  }
+  qs('#audio_mode').addEventListener('change', syncAudioMode);
+  syncAudioMode();
   qs('#run').addEventListener('click', async ()=>{
     const url = qs('#url').value.trim();
     if(!url){alert('URLを入力してください');return;}
     qs('#run').disabled = true;
     try{
-      const d = await api('?proxy=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,source_lang:'auto',target_lang:qs('#target_lang').value,tts_voice:qs('#voice').value})});
+      const d = await api('?proxy=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,source_lang:'auto',target_lang:qs('#target_lang').value,audio_mode:qs('#audio_mode').value,tts_voice:qs('#voice').value})});
       if(!d.ok){alert(d.error || '登録失敗');return;}
       if(d.job_id) {
         await watch(d.job_id);

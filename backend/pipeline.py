@@ -797,6 +797,32 @@ def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path
     return out
 
 
+def make_subtitle_only_video(subtitled_video: Path, source_video: Path, out_dir: Path) -> Path:
+    out = out_dir / "translated_subtitled_original_audio.mp4"
+    duration = media_duration(subtitled_video)
+    run_cmd([
+        FFMPEG_BIN,
+        "-y",
+        "-i",
+        str(subtitled_video),
+        "-i",
+        str(source_video),
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-t",
+        f"{duration:.3f}",
+        str(out),
+    ], timeout=3600)
+    ensure_rendered_video(out, "translated subtitled original audio")
+    return out
+
+
 def make_thumbnail(video: Path, out: Path) -> Path:
     run_cmd([
         FFMPEG_BIN,
@@ -818,7 +844,7 @@ def publish_to_kurage(
     job_id: str,
     full_video: Path,
     translated_srt: Path,
-    translated_audio: Path,
+    translated_audio: Path | None,
     source_url: str,
     target_lang: str,
     translated_text: str,
@@ -859,13 +885,14 @@ def publish_to_kurage(
         "source_platform": source["source_platform"],
         "original_url": display_source_url,
         "source_media_path": source_url if source_url != display_source_url else "",
+        "audio_mode": "subtitle_only" if not translated_audio else "dubbed",
         "summary": title,
         "article_url": "",
         "translated_text": translated_text,
         "video_file": str(output),
         "thumbnail_file": str(thumbnail),
         "translated_srt": str(translated_srt),
-        "translated_audio": str(translated_audio),
+        "translated_audio": str(translated_audio) if translated_audio else "",
         "views": 9999,
         "created_at": created,
         "updated_at": created,
@@ -894,17 +921,20 @@ def run_pipeline(
     target_lang: str,
     tts_voice: str,
     *,
+    audio_mode: str = "dubbed",
     original_url: str = "",
     source_title: str = "",
     source_platform: str = "",
 ) -> None:
     out_dir = job_dir(job_id)
     out_dir.mkdir(parents=True, exist_ok=True)
+    audio_mode = "subtitle_only" if audio_mode == "subtitle_only" else "dubbed"
     try:
         update_job(
             job_id,
             status="downloading",
             progress=5,
+            audio_mode=audio_mode,
             original_url=original_url,
             source_title=source_title,
             source_platform=source_platform,
@@ -921,29 +951,46 @@ def run_pipeline(
         update_job(job_id, status="translating", progress=50, source_srt=str(source_srt), source_txt=str(source_txt), note="翻訳中")
 
         translated_srt = translate_srt(source_srt, out_dir, source_lang, target_lang)
-        update_job(job_id, status="tts", progress=65, translated_srt=str(translated_srt), note="翻訳音声生成中")
         translated_text = srt_plain_text(translated_srt)
 
         video_duration = media_duration(video)
-        translated_audio = tts_from_srt(translated_srt, out_dir, tts_voice, target_duration=video_duration)
-        audio_duration = media_duration(translated_audio)
-        update_job(
-            job_id,
-            status="rendering_subtitle",
-            progress=78,
-            translated_audio=str(translated_audio),
-            translated_audio_duration=audio_duration,
-            source_video_duration=video_duration,
-            tts_rate=DEFAULT_TTS_RATE,
-            translated_audio_volume=TRANSLATED_AUDIO_VOLUME,
-            note="元動画のタイムラインに合わせて字幕を動画に合成中",
-        )
+        translated_audio: Path | None = None
+        if audio_mode == "dubbed":
+            update_job(job_id, status="tts", progress=65, translated_srt=str(translated_srt), note="翻訳音声生成中")
+            translated_audio = tts_from_srt(translated_srt, out_dir, tts_voice, target_duration=video_duration)
+            audio_duration = media_duration(translated_audio)
+            update_job(
+                job_id,
+                status="rendering_subtitle",
+                progress=78,
+                translated_audio=str(translated_audio),
+                translated_audio_duration=audio_duration,
+                source_video_duration=video_duration,
+                tts_rate=DEFAULT_TTS_RATE,
+                translated_audio_volume=TRANSLATED_AUDIO_VOLUME,
+                note="元動画のタイムラインに合わせて字幕を動画に合成中",
+            )
+        else:
+            update_job(
+                job_id,
+                status="rendering_subtitle",
+                progress=78,
+                translated_srt=str(translated_srt),
+                translated_audio="",
+                translated_audio_duration=0,
+                source_video_duration=video_duration,
+                note="元音声のまま翻訳字幕を動画に合成中",
+            )
 
         subtitled = burn_subtitles(video, translated_srt, out_dir, target_duration=video_duration)
-        update_job(job_id, status="rendering_audio", progress=88, subtitled_video=str(subtitled), note="翻訳音声を動画に合成中")
-
-        dubbed = replace_audio(video, translated_audio, out_dir)
-        full = make_full_video(subtitled, translated_audio, out_dir)
+        if audio_mode == "dubbed" and translated_audio:
+            update_job(job_id, status="rendering_audio", progress=88, subtitled_video=str(subtitled), note="翻訳音声を動画に合成中")
+            dubbed = replace_audio(video, translated_audio, out_dir)
+            full = make_full_video(subtitled, translated_audio, out_dir)
+        else:
+            update_job(job_id, status="rendering_audio", progress=88, subtitled_video=str(subtitled), note="元音声を字幕付き動画に合成中")
+            dubbed = None
+            full = make_subtitle_only_video(subtitled, video, out_dir)
         update_job(job_id, status="publishing", progress=95, note="Kurage動画として公開中")
         kurage_public = publish_to_kurage(
             job_id,
@@ -962,7 +1009,8 @@ def run_pipeline(
             status="done",
             progress=100,
             note="完了",
-            dubbed_video=str(dubbed),
+            audio_mode=audio_mode,
+            dubbed_video=str(dubbed) if dubbed else "",
             final_video=str(full),
             video_file=str(full),
             translated_text=translated_text,

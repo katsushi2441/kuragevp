@@ -46,6 +46,7 @@ class GenerateRequest(BaseModel):
     source_lang: str = DEFAULT_SOURCE_LANG
     target_lang: str = DEFAULT_TARGET_LANG
     tts_voice: str = DEFAULT_TTS_VOICE
+    audio_mode: str = "dubbed"
     original_url: str = ""
     source_title: str = ""
     source_platform: str = ""
@@ -76,6 +77,7 @@ def generate(req: GenerateRequest):
         source_lang=req.source_lang,
         target_lang=req.target_lang,
         tts_voice=req.tts_voice,
+        audio_mode=req.audio_mode,
         original_url=req.original_url.strip(),
         source_title=req.source_title.strip(),
         source_platform=req.source_platform.strip(),
@@ -85,6 +87,7 @@ def generate(req: GenerateRequest):
         target=run_pipeline,
         args=(job_id, url, req.source_lang, req.target_lang, req.tts_voice),
         kwargs={
+            "audio_mode": req.audio_mode,
             "original_url": req.original_url.strip(),
             "source_title": req.source_title.strip(),
             "source_platform": req.source_platform.strip(),
@@ -108,6 +111,8 @@ def status(job_id: str):
         "url": job.get("url"),
         "source_lang": job.get("source_lang"),
         "target_lang": job.get("target_lang"),
+        "tts_voice": job.get("tts_voice"),
+        "audio_mode": job.get("audio_mode", "dubbed"),
         "note": job.get("note"),
         "error": job.get("error"),
         "created_at": job.get("created_at"),
@@ -139,6 +144,7 @@ def jobs(limit: int = 20):
                 "progress": d.get("progress", 0),
                 "url": d.get("url"),
                 "target_lang": d.get("target_lang"),
+                "audio_mode": d.get("audio_mode", "dubbed"),
                 "created_at": d.get("created_at"),
                 "updated_at": d.get("updated_at"),
                 "note": d.get("note"),
