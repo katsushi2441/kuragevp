@@ -538,6 +538,24 @@ def smart_truncate(text: str, limit: int) -> str:
     return cut
 
 
+def compact_description(text: str, limit: int = 220) -> str:
+    text = re.sub(r"\s+", " ", (text or "").strip())
+    if not text:
+        return ""
+    sentences = [p.strip() for p in re.split(r"(?<=[。！？!?.,])\s*", text) if p.strip()]
+    if not sentences:
+        return smart_truncate(text, limit)
+    out = ""
+    for sentence in sentences:
+        candidate = (out + " " + sentence).strip() if out else sentence
+        if len(candidate) > limit:
+            break
+        out = candidate
+        if len(sentences) > 1 and len(out) >= min(90, limit):
+            break
+    return out or smart_truncate(text, limit)
+
+
 def mode_label(target_lang: str, audio_mode: str) -> str:
     lang = (target_lang or "").lower()
     subtitle_only = audio_mode == "subtitle_only"
@@ -605,21 +623,21 @@ def public_title_from_source(source: dict[str, str], target_lang: str, audio_mod
 
 
 def description_pair(source: dict[str, str], target_lang: str, translated_text: str) -> tuple[str, str, str]:
-    primary = (translated_text or "").strip()
+    primary = compact_description(translated_text)
     original = (source.get("source_title") or source.get("tweet_text") or "").strip()
     if not original:
         original = source.get("tweet_text", "").strip()
     lang = (target_lang or "").lower()
     if lang.startswith("en"):
-        secondary = original
+        secondary = compact_description(original)
         if secondary and not re.search(r"[\u3040-\u30ff\u3400-\u9fff]", secondary):
             secondary = translate_plain_text(secondary, "ja")
     elif lang.startswith("ja"):
-        secondary = original
+        secondary = compact_description(original)
         if secondary and not re.search(r"[A-Za-z]", secondary):
             secondary = translate_plain_text(secondary, "en")
     else:
-        secondary = original
+        secondary = compact_description(original)
     return primary, secondary, original
 
 
