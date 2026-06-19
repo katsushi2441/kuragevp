@@ -36,6 +36,30 @@ DEFAULT_TARGET_LANG = os.environ.get("KURAGEVP_TARGET_LANG", "ja")
 DEFAULT_TTS_VOICE = os.environ.get("KURAGEVP_TTS_VOICE", "ja-JP-NanamiNeural")
 DEFAULT_TTS_RATE = os.environ.get("KURAGEVP_TTS_RATE", "+22%")
 TRANSLATED_AUDIO_VOLUME = max(0.1, min(env_float("KURAGEVP_TRANSLATED_AUDIO_VOLUME", 1.35), 3.0))
+
+
+def env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# 吹替音量を「割れずに」一定の大きさへ底上げ (EBU R128 loudnorm)。
+# I=-14 LUFS は YouTube のラウドネス基準。OFFにすると素のvolume倍率のみ。
+TRANSLATED_AUDIO_LOUDNORM = env_bool("KURAGEVP_TRANSLATED_AUDIO_LOUDNORM", True)
+TRANSLATED_AUDIO_LOUDNORM_I = env_float("KURAGEVP_TRANSLATED_AUDIO_LOUDNORM_I", -14.0)
+TRANSLATED_AUDIO_LOUDNORM_TP = env_float("KURAGEVP_TRANSLATED_AUDIO_LOUDNORM_TP", -1.5)
+TRANSLATED_AUDIO_LOUDNORM_LRA = env_float("KURAGEVP_TRANSLATED_AUDIO_LOUDNORM_LRA", 11.0)
+
+# 翻訳エンジン: "claude" (翻訳→自己批正→自然化, 高品質) / "google" (deep-translator)。
+# claude失敗時はgoogleへ自動フォールバック。
+TRANSLATOR = os.environ.get("KURAGEVP_TRANSLATOR", "claude").strip().lower()
+CLAUDE_MODEL = os.environ.get("KURAGEVP_CLAUDE_MODEL", "sonnet")
+CLAUDE_BIN = os.environ.get("KURAGEVP_CLAUDE_BIN", "")
+CLAUDE_TIMEOUT = env_int("KURAGEVP_CLAUDE_TIMEOUT", 240)
+# 1回のClaude呼び出しに含める字幕行数 (整合性確保のためチャンク分割)。
+CLAUDE_TRANSLATE_CHUNK = env_int("KURAGEVP_CLAUDE_TRANSLATE_CHUNK", 60)
 WHISPER_MODEL = os.environ.get("KURAGEVP_WHISPER_MODEL", "small")
 WHISPER_DEVICE = os.environ.get("KURAGEVP_WHISPER_DEVICE", "cuda")
 WHISPER_COMPUTE_TYPE = os.environ.get("KURAGEVP_WHISPER_COMPUTE_TYPE", "float16")

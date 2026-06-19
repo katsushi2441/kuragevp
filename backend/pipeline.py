@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -33,6 +34,15 @@ try:
         SUBTITLE_MAX_LINES,
         TMP_DIR,
         TRANSLATED_AUDIO_VOLUME,
+        TRANSLATED_AUDIO_LOUDNORM,
+        TRANSLATED_AUDIO_LOUDNORM_I,
+        TRANSLATED_AUDIO_LOUDNORM_TP,
+        TRANSLATED_AUDIO_LOUDNORM_LRA,
+        TRANSLATOR,
+        CLAUDE_MODEL,
+        CLAUDE_BIN,
+        CLAUDE_TIMEOUT,
+        CLAUDE_TRANSLATE_CHUNK,
         VOICE_PRO_DIR,
         WHISPER_COMPUTE_TYPE,
         WHISPER_DEVICE,
@@ -59,6 +69,15 @@ except ImportError:
         SUBTITLE_MAX_LINES,
         TMP_DIR,
         TRANSLATED_AUDIO_VOLUME,
+        TRANSLATED_AUDIO_LOUDNORM,
+        TRANSLATED_AUDIO_LOUDNORM_I,
+        TRANSLATED_AUDIO_LOUDNORM_TP,
+        TRANSLATED_AUDIO_LOUDNORM_LRA,
+        TRANSLATOR,
+        CLAUDE_MODEL,
+        CLAUDE_BIN,
+        CLAUDE_TIMEOUT,
+        CLAUDE_TRANSLATE_CHUNK,
         VOICE_PRO_DIR,
         WHISPER_COMPUTE_TYPE,
         WHISPER_DEVICE,
@@ -297,7 +316,127 @@ def fmt_srt(sec: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+def _resolve_claude_bin() -> str:
+    candidates: list[str] = []
+    if CLAUDE_BIN:
+        candidates.append(CLAUDE_BIN)
+    found = shutil.which("claude")
+    if found:
+        candidates.append(found)
+    import glob
+
+    versioned = sorted(
+        glob.glob(
+            "/home/kojima/.vscode-server/extensions/"
+            "anthropic.claude-code-*/resources/native-binary/claude"
+        )
+    )
+    # 新しいバージョンを優先 (末尾が最新)。
+    candidates.extend(reversed(versioned))
+    for path in candidates:
+        if path and Path(path).exists() and os.access(path, os.X_OK):
+            return path
+    return ""
+
+
+def claude_request(prompt: str) -> str:
+    claude_bin = _resolve_claude_bin()
+    if not claude_bin:
+        return ""
+    cmd = [
+        claude_bin,
+        "-p",
+        "--output-format", "text",
+        "--permission-mode", "dontAsk",
+        "--model", CLAUDE_MODEL,
+        prompt,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT, check=False)
+    if proc.returncode != 0:
+        return ""
+    return (proc.stdout or "").strip()
+
+
+def _target_lang_label(target_lang: str) -> str:
+    lang = (target_lang or "").lower()
+    return {
+        "ja": "日本語", "en": "英語", "ko": "韓国語", "zh": "中国語",
+    }.get(lang[:2], target_lang.upper() or "the target language")
+
+
+_NUM_LINE_RE = re.compile(r"^\s*(\d+)[\.\)、:：]\s*(.*)$")
+
+
+def _translate_chunk_claude(lines: list[str], target_lang: str) -> list[str] | None:
+    """字幕チャンクをClaudeで「翻訳→自己批正→自然化」して返す。行数が一致しなければNone。"""
+    target = _target_lang_label(target_lang)
+    numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(lines, 1))
+    prompt = (
+        f"あなたはNetflix品質の字幕翻訳者です。次の字幕を{target}に翻訳してください。\n\n"
+        "手順（内部で実行し、最終結果だけ出力）:\n"
+        "1. まず直訳する\n"
+        "2. 直訳の不自然さ・誤訳・文脈ずれを自己点検する\n"
+        f"3. 話し言葉として自然で簡潔な{target}字幕に仕上げる\n\n"
+        "厳守ルール:\n"
+        f"- 出力は番号付きの{target}訳のみ。説明・前置き・原文は一切書かない\n"
+        "- 入力と同じ行数・同じ番号を維持する（1行＝1字幕、増減禁止）\n"
+        "- 各訳は1行に収める（改行を入れない）\n"
+        "- 固有名詞・数字・専門用語は文脈に合わせて正確に\n"
+        "- 機械翻訳調の硬い表現を避け、映像の語りとして自然にする\n\n"
+        f"字幕:\n{numbered}\n"
+    )
+    raw = claude_request(prompt)
+    if not raw:
+        return None
+    result: dict[int, str] = {}
+    for line in raw.splitlines():
+        m = _NUM_LINE_RE.match(line)
+        if m:
+            result[int(m.group(1))] = m.group(2).strip()
+    out: list[str] = []
+    for i, original in enumerate(lines, 1):
+        out.append(result.get(i) or original)
+    # 半数以上が訳せていなければ失敗扱い。
+    translated_count = sum(1 for i in range(1, len(lines) + 1) if result.get(i))
+    if translated_count < max(1, len(lines) // 2):
+        return None
+    return out
+
+
+def translate_srt_claude(source_srt: Path, out_dir: Path, target_lang: str) -> Path | None:
+    import pysubs2
+
+    subs = pysubs2.load(str(source_srt), encoding="utf-8")
+    events = [event for event in subs if event.plaintext.strip()]
+    if not events:
+        return None
+    texts = [event.plaintext.strip() for event in events]
+    translated: list[str] = []
+    chunk = max(1, CLAUDE_TRANSLATE_CHUNK)
+    for start in range(0, len(texts), chunk):
+        part = texts[start:start + chunk]
+        out_part = _translate_chunk_claude(part, target_lang)
+        if out_part is None:
+            return None
+        translated.extend(out_part)
+    if len(translated) != len(events):
+        return None
+    for event, text in zip(events, translated):
+        event.text = text
+    out = out_dir / f"translated.{target_lang}.srt"
+    subs.save(str(out))
+    return out
+
+
 def translate_srt(source_srt: Path, out_dir: Path, source_lang: str, target_lang: str) -> Path:
+    if TRANSLATOR == "claude":
+        try:
+            claude_out = translate_srt_claude(source_srt, out_dir, target_lang)
+            if claude_out is not None:
+                return claude_out
+        except Exception:
+            pass  # Google翻訳へフォールバック
+
     import pysubs2
     from deep_translator import GoogleTranslator
 
@@ -861,6 +1000,20 @@ def burn_subtitles(
     return out
 
 
+def dub_audio_filter() -> str | None:
+    """吹替音声に掛けるフィルタ。volume倍率 + loudnorm(割れない音量底上げ)。"""
+    filters: list[str] = []
+    if TRANSLATED_AUDIO_VOLUME != 1.0:
+        filters.append(f"volume={TRANSLATED_AUDIO_VOLUME:.3f}")
+    if TRANSLATED_AUDIO_LOUDNORM:
+        filters.append(
+            f"loudnorm=I={TRANSLATED_AUDIO_LOUDNORM_I:.1f}:"
+            f"TP={TRANSLATED_AUDIO_LOUDNORM_TP:.1f}:"
+            f"LRA={TRANSLATED_AUDIO_LOUDNORM_LRA:.1f}"
+        )
+    return ",".join(filters) if filters else None
+
+
 def replace_audio(video: Path, translated_audio: Path, out_dir: Path) -> Path:
     out = out_dir / "dubbed.mp4"
     duration = media_duration(video)
@@ -880,8 +1033,9 @@ def replace_audio(video: Path, translated_audio: Path, out_dir: Path) -> Path:
         "-c:a",
         "aac",
     ]
-    if TRANSLATED_AUDIO_VOLUME != 1.0:
-        cmd.extend(["-filter:a:0", f"volume={TRANSLATED_AUDIO_VOLUME:.3f}"])
+    audio_filter = dub_audio_filter()
+    if audio_filter:
+        cmd.extend(["-filter:a:0", audio_filter])
     cmd.extend([
         "-t",
         f"{duration:.3f}",
@@ -911,8 +1065,9 @@ def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path
         "-c:a",
         "aac",
     ]
-    if TRANSLATED_AUDIO_VOLUME != 1.0:
-        cmd.extend(["-filter:a:0", f"volume={TRANSLATED_AUDIO_VOLUME:.3f}"])
+    audio_filter = dub_audio_filter()
+    if audio_filter:
+        cmd.extend(["-filter:a:0", audio_filter])
     cmd.extend([
         "-t",
         f"{duration:.3f}",
@@ -1086,7 +1241,15 @@ def run_pipeline(
         update_job(job_id, status="transcribing", progress=30, audio_file=str(audio), note="音声テキスト化中")
 
         source_srt, source_txt = transcribe_audio(audio, out_dir, source_lang)
-        update_job(job_id, status="translating", progress=50, source_srt=str(source_srt), source_txt=str(source_txt), note="翻訳中")
+        update_job(
+            job_id,
+            status="translating",
+            progress=50,
+            source_srt=str(source_srt),
+            source_txt=str(source_txt),
+            translator=TRANSLATOR,
+            note="翻訳中" + ("（Claude）" if TRANSLATOR == "claude" else ""),
+        )
 
         translated_srt = translate_srt(source_srt, out_dir, source_lang, target_lang)
         translated_text = srt_plain_text(translated_srt)
