@@ -122,11 +122,18 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:14px 20px;d
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin:16px 0;box-shadow:0 2px 10px rgba(15,35,45,.04)}.card h2{font-size:14px;margin:0;padding:12px 16px;border-bottom:1px solid var(--border);color:var(--muted);letter-spacing:.04em;text-transform:uppercase}.body{padding:16px}
 .row{display:grid;grid-template-columns:1fr 140px 170px 140px;gap:10px}.row2{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 input,select{width:100%;border:1px solid #c9d8dd;border-radius:8px;padding:11px 12px;font:inherit;background:#fff}button{border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;padding:11px 18px;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+.mode-picker{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode-option{display:flex;align-items:flex-start;gap:10px;padding:13px;border:1px solid #d5e3e7;border-radius:10px;background:#fff;cursor:pointer;transition:border-color .18s,box-shadow .18s,background .18s}
+.mode-option input{width:auto;margin-top:4px;accent-color:var(--accent)}
+.mode-option strong{display:block;font-size:13px;color:var(--text)}
+.mode-option span{display:block;margin-top:3px;color:var(--muted);font-size:12px;line-height:1.6}
+.mode-option:has(input:checked){border-color:#78d7e3;background:linear-gradient(135deg,#f2fdff,#fff);box-shadow:0 0 0 3px rgba(0,127,150,.10)}
+.mode-note{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.7}
 .status{display:none}.bar{height:8px;background:#e3ecef;border-radius:999px;overflow:hidden;margin:12px 0}.fill{height:100%;background:linear-gradient(90deg,var(--accent),#2f8f45);width:0;transition:width .25s}.note{color:var(--muted);line-height:1.8}.badge{display:inline-block;border-radius:999px;padding:4px 9px;background:#e8f6f8;color:var(--accent);font-weight:800;font-size:12px}
 .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.links a{border:1px solid var(--border);border-radius:7px;padding:7px 10px;text-decoration:none;color:var(--accent);background:#fff;font-weight:700}
 .jobs{display:grid;gap:8px}.job{border:1px solid var(--border);border-radius:8px;background:#fbfdfd;padding:10px;display:grid;grid-template-columns:120px 1fr 70px;gap:10px;align-items:center}.job small{color:var(--muted)}
 .api{font-size:12px;font-weight:800;color:<?php echo $api_ok ? 'var(--green)' : 'var(--red)'; ?>}
-@media(max-width:720px){.row{grid-template-columns:1fr}.job{grid-template-columns:1fr}.wrap{padding:16px}header{align-items:flex-start;gap:10px;flex-direction:column}}
+@media(max-width:720px){.row,.mode-picker{grid-template-columns:1fr}.job{grid-template-columns:1fr}.wrap{padding:16px}header{align-items:flex-start;gap:10px;flex-direction:column}}
 </style>
 </head>
 <body>
@@ -178,6 +185,23 @@ input,select{width:100%;border:1px solid #c9d8dd;border-radius:8px;padding:11px 
           <button id="run">生成開始</button>
           <span class="note">source language は初期版では auto です。</span>
         </div>
+        <div class="mode-picker" role="radiogroup" aria-label="公開モード">
+          <label class="mode-option">
+            <input name="publish_mode" type="radio" value="vtuber" checked>
+            <span>
+              <strong>VTuberモード</strong>
+              <span>右下にKurage AI Navigatorを合成して、解説動画っぽく公開します。</span>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input name="publish_mode" type="radio" value="normal">
+            <span>
+              <strong>ノーマルモード</strong>
+              <span>アバターを載せず、翻訳字幕・吹き替え動画だけを生成します。</span>
+            </span>
+          </label>
+        </div>
+        <div class="mode-note">初期選択はVTuberモードです。案件や素材によって、通常の翻訳動画として出したい場合はノーマルモードを選べます。</div>
       </div>
     </section>
   <?php endif; ?>
@@ -206,7 +230,7 @@ async function loadJobs(){
   const d = await api('?proxy=jobs');
   const box = qs('#jobs');
   if(!d.jobs || !d.jobs.length){box.innerHTML='<p class="note">まだジョブはありません。</p>';return;}
-  box.innerHTML = d.jobs.map(j=>`<div class="job" onclick="watch('${esc(j.job_id)}')"><b>${esc(j.status)}</b><div><div>${esc(j.url)}</div><small>${esc(j.created_at||'')}</small></div><small>${esc(j.progress)}%</small></div>`).join('');
+  box.innerHTML = d.jobs.map(j=>`<div class="job" onclick="watch('${esc(j.job_id)}')"><b>${esc(j.status)}</b><div><div>${esc(j.url)}</div><small>${esc(j.created_at||'')}${j.vtuber_mode ? ' / VTuber' : ''}</small></div><small>${esc(j.progress)}%</small></div>`).join('');
 }
 async function watch(jobId){
   qs('#status').style.display='block';
@@ -247,7 +271,8 @@ if(isAdmin){
     if(!url){alert('URLを入力してください');return;}
     qs('#run').disabled = true;
     try{
-      const d = await api('?proxy=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,source_lang:'auto',target_lang:qs('#target_lang').value,audio_mode:qs('#audio_mode').value,tts_voice:qs('#voice').value})});
+      const publishMode = document.querySelector('input[name="publish_mode"]:checked')?.value || 'vtuber';
+      const d = await api('?proxy=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,source_lang:'auto',target_lang:qs('#target_lang').value,audio_mode:qs('#audio_mode').value,tts_voice:qs('#voice').value,vtuber_mode:publishMode === 'vtuber'})});
       if(!d.ok){alert(d.error || '登録失敗');return;}
       if(d.job_id) {
         await watch(d.job_id);

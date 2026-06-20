@@ -13,10 +13,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 try:
-    from .config import DEFAULT_SOURCE_LANG, DEFAULT_TARGET_LANG, DEFAULT_TTS_VOICE, JOBS_DIR, PORT, VOICE_PRO_DIR
+    from .config import DEFAULT_SOURCE_LANG, DEFAULT_TARGET_LANG, DEFAULT_TTS_VOICE, DEFAULT_VTUBER_MODE, JOBS_DIR, PORT, VOICE_PRO_DIR
     from .pipeline import load_job, new_job_id, run_pipeline, update_job
 except ImportError:
-    from config import DEFAULT_SOURCE_LANG, DEFAULT_TARGET_LANG, DEFAULT_TTS_VOICE, JOBS_DIR, PORT, VOICE_PRO_DIR
+    from config import DEFAULT_SOURCE_LANG, DEFAULT_TARGET_LANG, DEFAULT_TTS_VOICE, DEFAULT_VTUBER_MODE, JOBS_DIR, PORT, VOICE_PRO_DIR
     from pipeline import load_job, new_job_id, run_pipeline, update_job
 
 
@@ -50,6 +50,7 @@ class GenerateRequest(BaseModel):
     original_url: str = ""
     source_title: str = ""
     source_platform: str = ""
+    vtuber_mode: bool = DEFAULT_VTUBER_MODE
 
 
 @app.get("/health")
@@ -81,6 +82,7 @@ def generate(req: GenerateRequest):
         original_url=req.original_url.strip(),
         source_title=req.source_title.strip(),
         source_platform=req.source_platform.strip(),
+        vtuber_mode=req.vtuber_mode,
         created_at=time.strftime("%Y-%m-%d %H:%M:%S"),
     )
     t = threading.Thread(
@@ -91,6 +93,7 @@ def generate(req: GenerateRequest):
             "original_url": req.original_url.strip(),
             "source_title": req.source_title.strip(),
             "source_platform": req.source_platform.strip(),
+            "vtuber_mode": req.vtuber_mode,
         },
         daemon=True,
     )
@@ -113,6 +116,7 @@ def status(job_id: str):
         "target_lang": job.get("target_lang"),
         "tts_voice": job.get("tts_voice"),
         "audio_mode": job.get("audio_mode", "dubbed"),
+        "vtuber_mode": bool(job.get("vtuber_mode", DEFAULT_VTUBER_MODE)),
         "note": job.get("note"),
         "error": job.get("error"),
         "created_at": job.get("created_at"),
@@ -145,6 +149,7 @@ def jobs(limit: int = 20):
                 "url": d.get("url"),
                 "target_lang": d.get("target_lang"),
                 "audio_mode": d.get("audio_mode", "dubbed"),
+                "vtuber_mode": bool(d.get("vtuber_mode", DEFAULT_VTUBER_MODE)),
                 "created_at": d.get("created_at"),
                 "updated_at": d.get("updated_at"),
                 "note": d.get("note"),

@@ -33,11 +33,21 @@ try:
         SUBTITLE_MARGIN_V,
         SUBTITLE_MAX_LINES,
         TMP_DIR,
+        DEFAULT_VTUBER_MODE,
         TRANSLATED_AUDIO_VOLUME,
         TRANSLATED_AUDIO_LOUDNORM,
         TRANSLATED_AUDIO_LOUDNORM_I,
         TRANSLATED_AUDIO_LOUDNORM_TP,
         TRANSLATED_AUDIO_LOUDNORM_LRA,
+        VTUBER_AVATAR_IDLE,
+        VTUBER_AVATAR_MARGIN_X,
+        VTUBER_AVATAR_MARGIN_Y,
+        VTUBER_AVATAR_TALK,
+        VTUBER_AVATAR_WIDTH,
+        VTUBER_SUBTITLE_CJK_LINE_CHARS,
+        VTUBER_SUBTITLE_LATIN_LINE_CHARS,
+        VTUBER_SUBTITLE_MARGIN_L,
+        VTUBER_SUBTITLE_MARGIN_R,
         TRANSLATOR,
         CLAUDE_MODEL,
         CLAUDE_BIN,
@@ -68,11 +78,21 @@ except ImportError:
         SUBTITLE_MARGIN_V,
         SUBTITLE_MAX_LINES,
         TMP_DIR,
+        DEFAULT_VTUBER_MODE,
         TRANSLATED_AUDIO_VOLUME,
         TRANSLATED_AUDIO_LOUDNORM,
         TRANSLATED_AUDIO_LOUDNORM_I,
         TRANSLATED_AUDIO_LOUDNORM_TP,
         TRANSLATED_AUDIO_LOUDNORM_LRA,
+        VTUBER_AVATAR_IDLE,
+        VTUBER_AVATAR_MARGIN_X,
+        VTUBER_AVATAR_MARGIN_Y,
+        VTUBER_AVATAR_TALK,
+        VTUBER_AVATAR_WIDTH,
+        VTUBER_SUBTITLE_CJK_LINE_CHARS,
+        VTUBER_SUBTITLE_LATIN_LINE_CHARS,
+        VTUBER_SUBTITLE_MARGIN_L,
+        VTUBER_SUBTITLE_MARGIN_R,
         TRANSLATOR,
         CLAUDE_MODEL,
         CLAUDE_BIN,
@@ -173,9 +193,10 @@ def source_platform_label(source_url: str, source_platform: str = "") -> str:
 
 
 def source_metadata(source_url: str, source_title: str = "", source_platform: str = "") -> dict[str, str]:
+    clean_source_title = "" if is_generic_source_title(source_title) else (source_title or "").strip()
     tweet_id = extract_tweet_id(source_url)
     if not tweet_id or ("x.com/" not in source_url and "twitter.com/" not in source_url):
-        title = (source_title or "").strip() or "翻訳元動画"
+        title = clean_source_title or "翻訳元動画"
         platform_label = source_platform_label(source_url, source_platform)
         return {
             "source_url": source_url,
@@ -191,17 +212,20 @@ def source_metadata(source_url: str, source_title: str = "", source_platform: st
         author = tweet.get("author") if isinstance(tweet.get("author"), dict) else {}
         screen_name = str(author.get("screen_name") or author.get("username") or "Kurage Voice Pro")
         author_name = str(author.get("name") or screen_name)
-        text = str(tweet.get("text") or "").strip() or (source_title or "").strip()
+        text = str(tweet.get("text") or "").strip()
+        if is_generic_source_title(text):
+            text = ""
+        text = text or clean_source_title
         return {
             "source_url": source_url,
-            "source_title": (source_title or text or "X投稿").strip(),
+            "source_title": (clean_source_title or text).strip(),
             "source_platform": "X",
-            "tweet_text": text or "X投稿",
+            "tweet_text": text,
             "tweet_author": "@" + screen_name if screen_name and not screen_name.startswith("@") else screen_name,
             "tweet_author_name": author_name,
         }
     except Exception:
-        title = (source_title or "").strip() or "X投稿"
+        title = clean_source_title
         return {
             "source_url": source_url,
             "source_title": title,
@@ -670,6 +694,12 @@ def smart_truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     cut = text[:limit].rstrip()
+    sentence_cut = max(cut.rfind(mark) for mark in ("。", "！", "？", "!", "?", "."))
+    if sentence_cut >= max(12, limit // 3):
+        return cut[: sentence_cut + 1].strip()
+    clause_cut = cut.rfind("、")
+    if clause_cut >= max(12, limit // 2):
+        return cut[: clause_cut + 1].strip()
     if re.search(r"[A-Za-z0-9]$", cut):
         word_cut = re.sub(r"\s+\S*$", "", cut).strip()
         if len(word_cut) >= max(12, limit // 2):
@@ -731,6 +761,28 @@ def target_language_name(target_lang: str) -> str:
     return target_lang.upper() if target_lang else "Translation"
 
 
+def is_generic_source_title(text: str) -> bool:
+    normalized = re.sub(r"\s+", "", (text or "").strip()).lower()
+    return normalized in {"", "x投稿", "twitter投稿", "tweet", "xpost", "twitterpost"}
+
+
+def should_translate_title_to_ja(text: str) -> bool:
+    text = text or ""
+    if not text.strip():
+        return False
+    if re.search(r"[A-Za-z\uac00-\ud7af]", text):
+        return True
+    # Chinese Han text has no kana; Japanese usually contains kana in these captions.
+    return bool(re.search(r"[\u3400-\u9fff]", text)) and not re.search(r"[\u3040-\u30ff]", text)
+
+
+def is_latin_heavy_text(text: str) -> bool:
+    text = text or ""
+    latin = len(re.findall(r"[A-Za-z]", text))
+    non_latin = len(re.findall(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]", text))
+    return latin >= 12 and latin >= non_latin
+
+
 def secondary_language_name(target_lang: str) -> str:
     lang = (target_lang or "").lower()
     if lang.startswith("en"):
@@ -744,14 +796,24 @@ def secondary_language_name(target_lang: str) -> str:
     return "Original"
 
 
-def public_title_from_source(source: dict[str, str], target_lang: str, audio_mode: str = "dubbed") -> str:
-    text = (source.get("source_title") or source.get("tweet_text") or "").strip()
+def public_title_from_source(
+    source: dict[str, str],
+    target_lang: str,
+    audio_mode: str = "dubbed",
+    fallback_text: str = "",
+    title_source_text: str = "",
+) -> str:
+    text = (title_source_text or source.get("source_title") or source.get("tweet_text") or "").strip()
+    if is_generic_source_title(text):
+        text = ""
     first_line = first_content_line(text)
+    if not first_line:
+        first_line = first_content_line(compact_description(fallback_text, limit=160))
     if not first_line:
         platform = (source.get("source_platform") or "元動画").strip()
         first_line = f"{platform} translation video"
     title = first_line
-    if target_lang == "ja" and re.search(r"[A-Za-z]", title):
+    if target_lang == "ja" and should_translate_title_to_ja(title):
         title = translate_plain_text(title, "ja", limit=160)
     elif target_lang.startswith("en") and re.search(r"[\u3040-\u30ff\u3400-\u9fff]", title):
         title = translate_plain_text(title, "en", limit=160)
@@ -764,8 +826,12 @@ def public_title_from_source(source: dict[str, str], target_lang: str, audio_mod
 def description_pair(source: dict[str, str], target_lang: str, translated_text: str) -> tuple[str, str, str]:
     primary = compact_description(translated_text)
     original = (source.get("source_title") or source.get("tweet_text") or "").strip()
+    if is_generic_source_title(original):
+        original = ""
     if not original:
         original = source.get("tweet_text", "").strip()
+    if is_generic_source_title(original):
+        original = ""
     lang = (target_lang or "").lower()
     if lang.startswith("en"):
         secondary = compact_description(original)
@@ -901,7 +967,15 @@ def wrap_caption_text(text: str, line_chars: int | None = None, max_lines: int |
     return r"\N".join(lines[:max_lines])
 
 
-def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float | None = None) -> Path:
+def make_kurage_ass(
+    translated_srt: Path,
+    out_dir: Path,
+    target_duration: float | None = None,
+    marginl: int | None = None,
+    marginr: int | None = None,
+    cjk_line_chars: int | None = None,
+    latin_line_chars: int | None = None,
+) -> Path:
     import pysubs2
 
     source = pysubs2.load(str(translated_srt), encoding="utf-8")
@@ -925,14 +999,16 @@ def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float 
         outline=4,
         shadow=2,
         alignment=2,
-        marginl=SUBTITLE_MARGIN_L,
-        marginr=SUBTITLE_MARGIN_R,
+        marginl=SUBTITLE_MARGIN_L if marginl is None else marginl,
+        marginr=SUBTITLE_MARGIN_R if marginr is None else marginr,
         marginv=SUBTITLE_MARGIN_V,
     )
 
     for event in source:
         latin = is_latin_caption(event.plaintext)
-        chunks = split_caption_text(event.plaintext, latin=latin)
+        line_chars = latin_line_chars if latin else cjk_line_chars
+        chunk_max_chars = (line_chars * SUBTITLE_MAX_LINES) if line_chars else None
+        chunks = split_caption_text(event.plaintext, max_chars=chunk_max_chars, latin=latin)
         if not chunks:
             continue
         start = int(event.start * scale)
@@ -948,7 +1024,11 @@ def make_kurage_ass(translated_srt: Path, out_dir: Path, target_duration: float 
                 pysubs2.SSAEvent(
                     start=ev_start,
                     end=ev_end,
-                    text=wrap_caption_text(chunk, latin=latin),
+                    text=wrap_caption_text(
+                        chunk,
+                        line_chars=line_chars,
+                        latin=latin,
+                    ),
                     style="Default",
                 )
             )
@@ -964,9 +1044,20 @@ def burn_subtitles(
     out_dir: Path,
     target_duration: float | None = None,
     subtitle_target_duration: float | None = None,
+    vtuber_mode: bool = False,
 ) -> Path:
     out = out_dir / "subtitled.mp4"
-    ass = make_kurage_ass(translated_srt, out_dir, target_duration=subtitle_target_duration)
+    subtitle_margin_l = max(SUBTITLE_MARGIN_L, VTUBER_SUBTITLE_MARGIN_L) if vtuber_mode else SUBTITLE_MARGIN_L
+    subtitle_margin_r = max(SUBTITLE_MARGIN_R, VTUBER_SUBTITLE_MARGIN_R) if vtuber_mode else SUBTITLE_MARGIN_R
+    ass = make_kurage_ass(
+        translated_srt,
+        out_dir,
+        target_duration=subtitle_target_duration,
+        marginl=subtitle_margin_l,
+        marginr=subtitle_margin_r,
+        cjk_line_chars=VTUBER_SUBTITLE_CJK_LINE_CHARS if vtuber_mode else None,
+        latin_line_chars=VTUBER_SUBTITLE_LATIN_LINE_CHARS if vtuber_mode else None,
+    )
     filter_complex = (
         "[0:v]scale=576:1024:force_original_aspect_ratio=increase,"
         "crop=576:1024,boxblur=18:1,eq=brightness=-0.20[bg];"
@@ -1078,6 +1169,60 @@ def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path
     return out
 
 
+def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
+    """Overlay the Kurage PNG-tuber avatar on the completed Voice Pro video."""
+    if not VTUBER_AVATAR_IDLE.exists() or not VTUBER_AVATAR_TALK.exists():
+        return video
+
+    out = out_dir / "final_vtuber.mp4"
+    duration = media_duration(video)
+    width = max(80, int(VTUBER_AVATAR_WIDTH))
+    margin_x = max(0, int(VTUBER_AVATAR_MARGIN_X))
+    margin_y = max(0, int(VTUBER_AVATAR_MARGIN_Y))
+    filter_complex = (
+        f"[1:v]format=rgba,scale={width}:-1[idle];"
+        f"[2:v]format=rgba,scale={width}:-1[talk];"
+        f"[0:v][idle]overlay=x=W-w-{margin_x}:y=H-h-{margin_y}:format=auto[base];"
+        f"[base][talk]overlay=x=W-w-{margin_x}:y=H-h-{margin_y}:"
+        "enable='lt(mod(t,0.28),0.10)':format=auto[v]"
+    )
+    run_cmd([
+        FFMPEG_BIN,
+        "-y",
+        "-i",
+        str(video),
+        "-loop",
+        "1",
+        "-i",
+        str(VTUBER_AVATAR_IDLE),
+        "-loop",
+        "1",
+        "-i",
+        str(VTUBER_AVATAR_TALK),
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[v]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-c:a",
+        "copy",
+        "-t",
+        f"{duration:.3f}",
+        str(out),
+    ], timeout=3600)
+    ensure_rendered_video(out, "vtuber voice pro")
+    return out
+
+
 def make_subtitle_only_video(subtitled_video: Path, source_video: Path, out_dir: Path) -> Path:
     out = out_dir / "translated_subtitled_original_audio.mp4"
     duration = media_duration(subtitled_video)
@@ -1133,6 +1278,8 @@ def publish_to_kurage(
     original_url: str = "",
     source_title: str = "",
     source_platform: str = "",
+    vtuber_mode: bool = DEFAULT_VTUBER_MODE,
+    original_text: str = "",
 ) -> dict[str, str]:
     public_dir = KURAGE_JOBS_DIR / job_id
     public_dir.mkdir(parents=True, exist_ok=True)
@@ -1148,7 +1295,9 @@ def publish_to_kurage(
     display_source_url = (original_url or source_url or "").strip()
     source = source_metadata(display_source_url, source_title, source_platform)
     audio_mode = "subtitle_only" if not translated_audio else "dubbed"
-    title = public_title_from_source(source, target_lang, audio_mode)
+    source_title_text = (source.get("source_title") or source.get("tweet_text") or "").strip()
+    title_source_text = source_title_text or (original_text if is_latin_heavy_text(original_text) else "")
+    title = public_title_from_source(source, target_lang, audio_mode, translated_text, title_source_text)
     primary_desc, secondary_desc, original_desc = description_pair(source, target_lang, translated_text)
     display_summary = bilingual_display_summary(target_lang, primary_desc, secondary_desc)
     voice_label = mode_label(target_lang, audio_mode)
@@ -1171,6 +1320,7 @@ def publish_to_kurage(
         "original_url": display_source_url,
         "source_media_path": source_url if source_url != display_source_url else "",
         "audio_mode": audio_mode,
+        "vtuber_mode": vtuber_mode,
         "voice_pro_label": voice_label,
         "summary": primary_desc or title,
         "display_summary": display_summary,
@@ -1218,6 +1368,7 @@ def run_pipeline(
     original_url: str = "",
     source_title: str = "",
     source_platform: str = "",
+    vtuber_mode: bool = DEFAULT_VTUBER_MODE,
 ) -> None:
     out_dir = job_dir(job_id)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1231,6 +1382,7 @@ def run_pipeline(
             original_url=original_url,
             source_title=source_title,
             source_platform=source_platform,
+            vtuber_mode=vtuber_mode,
             note="動画取得中",
         )
         video = download_video(url, out_dir)
@@ -1283,7 +1435,7 @@ def run_pipeline(
                 note="元音声のまま翻訳字幕を動画に合成中",
             )
 
-        subtitled = burn_subtitles(video, translated_srt, out_dir, target_duration=video_duration)
+        subtitled = burn_subtitles(video, translated_srt, out_dir, target_duration=video_duration, vtuber_mode=vtuber_mode)
         if audio_mode == "dubbed" and translated_audio:
             update_job(job_id, status="rendering_audio", progress=88, subtitled_video=str(subtitled), note="翻訳音声を動画に合成中")
             dubbed = replace_audio(video, translated_audio, out_dir)
@@ -1292,6 +1444,11 @@ def run_pipeline(
             update_job(job_id, status="rendering_audio", progress=88, subtitled_video=str(subtitled), note="元音声を字幕付き動画に合成中")
             dubbed = None
             full = make_subtitle_only_video(subtitled, video, out_dir)
+
+        if vtuber_mode:
+            update_job(job_id, status="rendering_vtuber", progress=92, final_video=str(full), vtuber_mode=True, note="VTuberアバターを動画に合成中")
+            full = apply_vtuber_overlay(full, out_dir)
+
         update_job(job_id, status="publishing", progress=95, note="Kurage動画として公開中")
         kurage_public = publish_to_kurage(
             job_id,
@@ -1304,6 +1461,8 @@ def run_pipeline(
             original_url=original_url,
             source_title=source_title,
             source_platform=source_platform,
+            vtuber_mode=vtuber_mode,
+            original_text=source_txt.read_text(encoding="utf-8", errors="ignore"),
         )
         update_job(
             job_id,
@@ -1311,6 +1470,7 @@ def run_pipeline(
             progress=100,
             note="完了",
             audio_mode=audio_mode,
+            vtuber_mode=vtuber_mode,
             dubbed_video=str(dubbed) if dubbed else "",
             final_video=str(full),
             video_file=str(full),
