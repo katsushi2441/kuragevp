@@ -1339,7 +1339,7 @@ def publish_to_kurage(
         "thumbnail_file": str(thumbnail),
         "translated_srt": str(translated_srt),
         "translated_audio": str(translated_audio) if translated_audio else "",
-        "views": 9999,
+        "views": 0,
         "created_at": created,
         "updated_at": created,
         "script": {
