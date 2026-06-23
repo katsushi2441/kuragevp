@@ -58,6 +58,7 @@ try:
         WHISPER_DEVICE,
         WHISPER_MODEL,
     )
+    from .tts_normalizer_bridge import normalize_tts_text
 except ImportError:
     from config import (
         DEFAULT_SOURCE_LANG,
@@ -103,6 +104,7 @@ except ImportError:
         WHISPER_DEVICE,
         WHISPER_MODEL,
     )
+    from tts_normalizer_bridge import normalize_tts_text
 
 
 def now() -> str:
@@ -479,7 +481,8 @@ def translate_srt(source_srt: Path, out_dir: Path, source_lang: str, target_lang
 async def _edge_tts(text: str, out: Path, voice: str, rate: str) -> None:
     import edge_tts
 
-    communicate = edge_tts.Communicate(text, voice, rate=rate)
+    tts_text = normalize_tts_text(text)
+    communicate = edge_tts.Communicate(tts_text, voice, rate=rate)
     await communicate.save(str(out))
 
 

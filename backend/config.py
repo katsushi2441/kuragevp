@@ -35,6 +35,7 @@ DEFAULT_SOURCE_LANG = os.environ.get("KURAGEVP_SOURCE_LANG", "auto")
 DEFAULT_TARGET_LANG = os.environ.get("KURAGEVP_TARGET_LANG", "ja")
 DEFAULT_TTS_VOICE = os.environ.get("KURAGEVP_TTS_VOICE", "ja-JP-NanamiNeural")
 DEFAULT_TTS_RATE = os.environ.get("KURAGEVP_TTS_RATE", "+22%")
+KURAGE_TTS_NORMALIZER_DIR = Path(os.environ.get("KURAGE_TTS_NORMALIZER_DIR", "/home/kojima/work/kurage/backend"))
 TRANSLATED_AUDIO_VOLUME = max(0.1, min(env_float("KURAGEVP_TRANSLATED_AUDIO_VOLUME", 1.35), 3.0))
 
 

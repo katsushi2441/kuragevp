@@ -37,3 +37,7 @@
 ## 注意
 
 TTS音声を字幕タイムスタンプへ完全同期するには、Voice-Proの `EdgeTTS.srt_to_voice()` や F5-TTS/CosyVoice の同期ロジックを直接利用する方向へ寄せる。初期版はまず成果物生成を優先し、音声は元動画の声ではなく Edge-TTS を使う。
+## Shared TTS pronunciation
+
+Kurage Voice Pro normalizes only the text sent to TTS through the shared Kurage normalizer. Subtitles and job metadata remain unchanged. The default normalizer path is `/home/kojima/work/kurage/backend` and can be overridden with `KURAGE_TTS_NORMALIZER_DIR`. Product names and AI/OSS terms should be added to Kurage `config/tts_pronunciation.json`, not duplicated here.
+
