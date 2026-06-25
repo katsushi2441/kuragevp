@@ -44,6 +44,7 @@ try:
         VTUBER_AVATAR_IDLE,
         VTUBER_AVATAR_MARGIN_X,
         VTUBER_AVATAR_MARGIN_Y,
+        VTUBER_AVATAR_SHIFT_RIGHT_CHARS,
         VTUBER_AVATAR_TALK,
         VTUBER_AVATAR_WIDTH,
         VTUBER_SUBTITLE_CJK_LINE_CHARS,
@@ -92,6 +93,7 @@ except ImportError:
         VTUBER_AVATAR_IDLE,
         VTUBER_AVATAR_MARGIN_X,
         VTUBER_AVATAR_MARGIN_Y,
+        VTUBER_AVATAR_SHIFT_RIGHT_CHARS,
         VTUBER_AVATAR_TALK,
         VTUBER_AVATAR_WIDTH,
         VTUBER_SUBTITLE_CJK_LINE_CHARS,
@@ -1193,11 +1195,12 @@ def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
     width = max(80, int(VTUBER_AVATAR_WIDTH))
     margin_x = max(0, int(VTUBER_AVATAR_MARGIN_X))
     margin_y = max(0, int(VTUBER_AVATAR_MARGIN_Y))
+    avatar_shift_x = max(0, int(VTUBER_AVATAR_SHIFT_RIGHT_CHARS)) * int(SUBTITLE_FONT_SIZE)
     filter_complex = (
         f"[1:v]format=rgba,scale={width}:-1[idle];"
         f"[2:v]format=rgba,scale={width}:-1[talk];"
-        f"[0:v][idle]overlay=x=W-w-{margin_x}:y=H-h-{margin_y}:format=auto[base];"
-        f"[base][talk]overlay=x=W-w-{margin_x}:y=H-h-{margin_y}:"
+        f"[0:v][idle]overlay=x=W-w-{margin_x}+{avatar_shift_x}:y=H-h-{margin_y}:format=auto[base];"
+        f"[base][talk]overlay=x=W-w-{margin_x}+{avatar_shift_x}:y=H-h-{margin_y}:"
         "enable='lt(mod(t,0.28),0.10)':format=auto[v]"
     )
     run_cmd([
