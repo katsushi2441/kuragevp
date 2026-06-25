@@ -999,7 +999,7 @@ def make_kurage_ass(
     shift_y = max(0, int(SUBTITLE_SHIFT_UP_LINES)) * (int(SUBTITLE_FONT_SIZE) + 8)
     base_margin_l = SUBTITLE_MARGIN_L if marginl is None else marginl
     base_margin_r = SUBTITLE_MARGIN_R if marginr is None else marginr
-    subtitle_x = int((base_margin_l + (576 - base_margin_r)) / 2 + shift_x)
+    subtitle_x = int(base_margin_l + shift_x)
     subtitle_y = int(1024 - (SUBTITLE_MARGIN_V + shift_y))
     position_tag = rf"{{\pos({subtitle_x},{subtitle_y})}}"
     ass.styles["Default"] = pysubs2.SSAStyle(
@@ -1012,7 +1012,7 @@ def make_kurage_ass(
         borderstyle=1,
         outline=4,
         shadow=2,
-        alignment=2,
+        alignment=1,
         marginl=base_margin_l,
         marginr=base_margin_r,
         marginv=SUBTITLE_MARGIN_V,
