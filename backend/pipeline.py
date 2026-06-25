@@ -32,6 +32,8 @@ try:
         SUBTITLE_MARGIN_R,
         SUBTITLE_MARGIN_V,
         SUBTITLE_MAX_LINES,
+        SUBTITLE_SHIFT_RIGHT_CHARS,
+        SUBTITLE_SHIFT_UP_LINES,
         TMP_DIR,
         DEFAULT_VTUBER_MODE,
         TRANSLATED_AUDIO_VOLUME,
@@ -78,6 +80,8 @@ except ImportError:
         SUBTITLE_MARGIN_R,
         SUBTITLE_MARGIN_V,
         SUBTITLE_MAX_LINES,
+        SUBTITLE_SHIFT_RIGHT_CHARS,
+        SUBTITLE_SHIFT_UP_LINES,
         TMP_DIR,
         DEFAULT_VTUBER_MODE,
         TRANSLATED_AUDIO_VOLUME,
@@ -991,6 +995,13 @@ def make_kurage_ass(
     ass.info["PlayResX"] = "576"
     ass.info["PlayResY"] = "1024"
     ass.info["WrapStyle"] = "2"
+    shift_x = max(0, int(SUBTITLE_SHIFT_RIGHT_CHARS)) * int(SUBTITLE_FONT_SIZE)
+    shift_y = max(0, int(SUBTITLE_SHIFT_UP_LINES)) * (int(SUBTITLE_FONT_SIZE) + 8)
+    base_margin_l = SUBTITLE_MARGIN_L if marginl is None else marginl
+    base_margin_r = SUBTITLE_MARGIN_R if marginr is None else marginr
+    subtitle_x = int((base_margin_l + (576 - base_margin_r)) / 2 + shift_x)
+    subtitle_y = int(1024 - (SUBTITLE_MARGIN_V + shift_y))
+    position_tag = rf"{{\pos({subtitle_x},{subtitle_y})}}"
     ass.styles["Default"] = pysubs2.SSAStyle(
         fontname="Noto Sans CJK JP",
         fontsize=SUBTITLE_FONT_SIZE,
@@ -1002,8 +1013,8 @@ def make_kurage_ass(
         outline=4,
         shadow=2,
         alignment=2,
-        marginl=SUBTITLE_MARGIN_L if marginl is None else marginl,
-        marginr=SUBTITLE_MARGIN_R if marginr is None else marginr,
+        marginl=base_margin_l,
+        marginr=base_margin_r,
         marginv=SUBTITLE_MARGIN_V,
     )
 
@@ -1027,7 +1038,7 @@ def make_kurage_ass(
                 pysubs2.SSAEvent(
                     start=ev_start,
                     end=ev_end,
-                    text=wrap_caption_text(
+                    text=position_tag + wrap_caption_text(
                         chunk,
                         line_chars=line_chars,
                         latin=latin,
