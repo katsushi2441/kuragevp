@@ -1191,8 +1191,8 @@ def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
     """Overlay the Kurage PNG-tuber avatar on the completed Voice Pro video."""
     frame_paths = [Path(p) for p in VTUBER_AVATAR_LIPSYNC_FRAMES]
     if len(frame_paths) != 5 or not all(p.exists() for p in frame_paths):
-        frame_paths = [VTUBER_AVATAR_IDLE, VTUBER_AVATAR_TALK]
-    if not all(Path(p).exists() for p in frame_paths):
+        # Do not fall back to old idle/talk full-image switching. That reopens
+        # the visible avatar-jump bug; the shared lip-sync frames are canonical.
         return video
 
     out = out_dir / "final_vtuber.mp4"
