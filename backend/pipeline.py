@@ -42,6 +42,7 @@ try:
         TRANSLATED_AUDIO_LOUDNORM_TP,
         TRANSLATED_AUDIO_LOUDNORM_LRA,
         VTUBER_AVATAR_IDLE,
+        VTUBER_AVATAR_LIPSYNC_FRAMES,
         VTUBER_AVATAR_MARGIN_X,
         VTUBER_AVATAR_MARGIN_Y,
         VTUBER_AVATAR_SHIFT_RIGHT_CHARS,
@@ -91,6 +92,7 @@ except ImportError:
         TRANSLATED_AUDIO_LOUDNORM_TP,
         TRANSLATED_AUDIO_LOUDNORM_LRA,
         VTUBER_AVATAR_IDLE,
+        VTUBER_AVATAR_LIPSYNC_FRAMES,
         VTUBER_AVATAR_MARGIN_X,
         VTUBER_AVATAR_MARGIN_Y,
         VTUBER_AVATAR_SHIFT_RIGHT_CHARS,
@@ -1187,7 +1189,10 @@ def make_full_video(subtitled_video: Path, translated_audio: Path, out_dir: Path
 
 def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
     """Overlay the Kurage PNG-tuber avatar on the completed Voice Pro video."""
-    if not VTUBER_AVATAR_IDLE.exists() or not VTUBER_AVATAR_TALK.exists():
+    frame_paths = [Path(p) for p in VTUBER_AVATAR_LIPSYNC_FRAMES]
+    if len(frame_paths) != 5 or not all(p.exists() for p in frame_paths):
+        frame_paths = [VTUBER_AVATAR_IDLE, VTUBER_AVATAR_TALK]
+    if not all(Path(p).exists() for p in frame_paths):
         return video
 
     out = out_dir / "final_vtuber.mp4"
@@ -1195,31 +1200,33 @@ def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
     width = max(80, int(VTUBER_AVATAR_WIDTH))
     margin_x = max(0, int(VTUBER_AVATAR_MARGIN_X))
     margin_y = max(0, int(VTUBER_AVATAR_MARGIN_Y))
-    avatar_shift_x = max(0, int(VTUBER_AVATAR_SHIFT_RIGHT_CHARS)) * int(SUBTITLE_FONT_SIZE)
-    filter_complex = (
-        f"[1:v]format=rgba,scale={width}:-1[idle];"
-        f"[2:v]format=rgba,scale={width}:-1[talk];"
-        f"[0:v][idle]overlay=x=W-w-{margin_x}+{avatar_shift_x}:y=H-h-{margin_y}:format=auto[base];"
-        f"[base][talk]overlay=x=W-w-{margin_x}+{avatar_shift_x}:y=H-h-{margin_y}:"
-        "enable='lt(mod(t,0.28),0.10)':format=auto[v]"
-    )
-    run_cmd([
+    # Keep the new full-body avatar inside the frame. Legacy shift-right
+    # settings were useful for the old small jellyfish, but clip this avatar.
+    x_expr = f"W-w-{margin_x}"
+    y_expr = f"H-h-{margin_y}"
+    scaled = [f"[{i + 1}:v]format=rgba,scale={width}:-1[f{i}]" for i in range(len(frame_paths))]
+    overlays = [f"[0:v][f0]overlay=x={x_expr}:y={y_expr}:format=auto[v0]"]
+    for i in range(1, len(frame_paths)):
+        start = (i - 1) * 0.07
+        end = i * 0.07
+        overlays.append(
+            f"[v{i - 1}][f{i}]overlay=x={x_expr}:y={y_expr}:"
+            f"enable='between(mod(t,0.35),{start:.2f},{end:.2f})':format=auto[v{i}]"
+        )
+    filter_complex = ";".join(scaled + overlays)
+    cmd = [
         FFMPEG_BIN,
         "-y",
         "-i",
         str(video),
-        "-loop",
-        "1",
-        "-i",
-        str(VTUBER_AVATAR_IDLE),
-        "-loop",
-        "1",
-        "-i",
-        str(VTUBER_AVATAR_TALK),
+    ]
+    for frame in frame_paths:
+        cmd.extend(["-loop", "1", "-i", str(frame)])
+    cmd.extend([
         "-filter_complex",
         filter_complex,
         "-map",
-        "[v]",
+        f"[v{len(frame_paths) - 1}]",
         "-map",
         "0:a?",
         "-c:v",
@@ -1235,7 +1242,8 @@ def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
         "-t",
         f"{duration:.3f}",
         str(out),
-    ], timeout=3600)
+    ])
+    run_cmd(cmd, timeout=3600)
     ensure_rendered_video(out, "vtuber voice pro")
     return out
 
