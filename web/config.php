@@ -47,8 +47,8 @@ function aigm_load_config($yaml_path) {
 $_aigm_config = aigm_load_config(__DIR__ . '/config.yaml');
 
 /* Ollama */
-define('OLLAMA_API',   isset($_aigm_config['ollama']['api_url'])       ? $_aigm_config['ollama']['api_url']       : 'https://exbridge.ddns.net/api/generate');
-define('OLLAMA_MODEL', isset($_aigm_config['ollama']['default_model'])  ? $_aigm_config['ollama']['default_model']  : 'gemma4:e4b');
+define('OLLAMA_API',   isset($_aigm_config['ollama']['api_url'])       ? $_aigm_config['ollama']['api_url']       : 'http://192.168.0.14:11434/api/generate');
+define('OLLAMA_MODEL', isset($_aigm_config['ollama']['default_model'])  ? $_aigm_config['ollama']['default_model']  : 'gemma4:12b-it-qat');
 
 /* Site */
 define('AIGM_BASE_URL',      isset($_aigm_config['site']['base_url'])      ? $_aigm_config['site']['base_url']      : 'https://kurage.exbridge.jp');
