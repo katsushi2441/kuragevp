@@ -41,12 +41,9 @@ try:
         TRANSLATED_AUDIO_LOUDNORM_I,
         TRANSLATED_AUDIO_LOUDNORM_TP,
         TRANSLATED_AUDIO_LOUDNORM_LRA,
-        VTUBER_AVATAR_IDLE,
         VTUBER_AVATAR_LIPSYNC_FRAMES,
         VTUBER_AVATAR_MARGIN_X,
         VTUBER_AVATAR_MARGIN_Y,
-        VTUBER_AVATAR_SHIFT_RIGHT_CHARS,
-        VTUBER_AVATAR_TALK,
         VTUBER_AVATAR_WIDTH,
         VTUBER_SUBTITLE_CJK_LINE_CHARS,
         VTUBER_SUBTITLE_LATIN_LINE_CHARS,
@@ -91,12 +88,9 @@ except ImportError:
         TRANSLATED_AUDIO_LOUDNORM_I,
         TRANSLATED_AUDIO_LOUDNORM_TP,
         TRANSLATED_AUDIO_LOUDNORM_LRA,
-        VTUBER_AVATAR_IDLE,
         VTUBER_AVATAR_LIPSYNC_FRAMES,
         VTUBER_AVATAR_MARGIN_X,
         VTUBER_AVATAR_MARGIN_Y,
-        VTUBER_AVATAR_SHIFT_RIGHT_CHARS,
-        VTUBER_AVATAR_TALK,
         VTUBER_AVATAR_WIDTH,
         VTUBER_SUBTITLE_CJK_LINE_CHARS,
         VTUBER_SUBTITLE_LATIN_LINE_CHARS,
@@ -113,6 +107,8 @@ except ImportError:
         WHISPER_MODEL,
     )
     from tts_normalizer_bridge import normalize_tts_text
+
+from kurage_avatar_overlay import build_ffmpeg_lipsync_overlay  # noqa: E402
 
 
 def now() -> str:
@@ -1200,23 +1196,7 @@ def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
     width = max(80, int(VTUBER_AVATAR_WIDTH))
     margin_x = max(0, int(VTUBER_AVATAR_MARGIN_X))
     margin_y = max(0, int(VTUBER_AVATAR_MARGIN_Y))
-    # Keep the new full-body avatar inside the frame. Legacy shift-right
-    # settings were useful for the old small jellyfish, but clip this avatar.
-    # Keep the avatar alive without switching whole-body images: the canonical
-    # kvtuber lip-sync frames handle the mouth, and ffmpeg adds only a slow,
-    # subtle body sway so the old jump/flicker bug cannot return.
-    x_expr = f"W-w-{margin_x}+sin(t*1.013)*2"
-    y_expr = f"H-h-{margin_y}-abs(sin(t*0.604))*5"
-    scaled = [f"[{i + 1}:v]format=rgba,scale={width}:-1[f{i}]" for i in range(len(frame_paths))]
-    overlays = [f"[0:v][f0]overlay=x={x_expr}:y={y_expr}:format=auto[v0]"]
-    for i in range(1, len(frame_paths)):
-        start = (i - 1) * 0.07
-        end = i * 0.07
-        overlays.append(
-            f"[v{i - 1}][f{i}]overlay=x={x_expr}:y={y_expr}:"
-            f"enable='between(mod(t,0.35),{start:.2f},{end:.2f})':format=auto[v{i}]"
-        )
-    filter_complex = ";".join(scaled + overlays)
+    filter_complex, output_label = build_ffmpeg_lipsync_overlay(len(frame_paths), width, margin_x, margin_y)
     cmd = [
         FFMPEG_BIN,
         "-y",
@@ -1229,7 +1209,7 @@ def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
         "-filter_complex",
         filter_complex,
         "-map",
-        f"[v{len(frame_paths) - 1}]",
+        output_label,
         "-map",
         "0:a?",
         "-c:v",

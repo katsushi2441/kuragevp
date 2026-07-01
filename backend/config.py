@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 
@@ -56,12 +57,13 @@ TRANSLATED_AUDIO_LOUDNORM_LRA = env_float("KURAGEVP_TRANSLATED_AUDIO_LOUDNORM_LR
 # Kurage公開用のPNGアバター演出。Voice ProではデフォルトでONにして、
 # 翻訳/吹替動画にもKurage AI Navigatorを載せる。
 DEFAULT_VTUBER_MODE = env_bool("KURAGEVP_DEFAULT_VTUBER_MODE", True)
-VTUBER_AVATAR_IDLE = Path(os.environ.get("KURAGEVP_VTUBER_AVATAR_IDLE", "/home/kojima/work/kuragevp/images/kurage_avatar_idle.png"))
-VTUBER_AVATAR_TALK = Path(os.environ.get("KURAGEVP_VTUBER_AVATAR_TALK", "/home/kojima/work/kuragevp/images/kurage_avatar_talk_open.png"))
-# kvtuber owns the canonical Kurage avatar. Voice Pro references it directly
-# instead of carrying stale copies.
-VTUBER_AVATAR_LIPSYNC_DIR = Path(os.environ.get("KURAGEVP_VTUBER_AVATAR_LIPSYNC_DIR", "/home/kojima/work/kvtuber/public/avatar/lipsync"))
-VTUBER_AVATAR_LIPSYNC_FRAMES = [VTUBER_AVATAR_LIPSYNC_DIR / f"kurage_mouth_{i}.png" for i in range(5)]
+KVTUBER_SHARED_DIR = Path(os.environ.get("KURAGE_AVATAR_SHARED_DIR", "/home/kojima/work/kvtuber/shared"))
+if str(KVTUBER_SHARED_DIR) not in sys.path:
+    sys.path.insert(0, str(KVTUBER_SHARED_DIR))
+
+from kurage_avatar_overlay import avatar_frames  # noqa: E402
+
+VTUBER_AVATAR_LIPSYNC_FRAMES = avatar_frames()
 VTUBER_AVATAR_WIDTH = env_int("KURAGEVP_VTUBER_AVATAR_WIDTH", 180)
 VTUBER_AVATAR_MARGIN_X = env_int("KURAGEVP_VTUBER_AVATAR_MARGIN_X", 18)
 VTUBER_AVATAR_MARGIN_Y = env_int("KURAGEVP_VTUBER_AVATAR_MARGIN_Y", 18)
