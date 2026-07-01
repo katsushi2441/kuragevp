@@ -1202,8 +1202,11 @@ def apply_vtuber_overlay(video: Path, out_dir: Path) -> Path:
     margin_y = max(0, int(VTUBER_AVATAR_MARGIN_Y))
     # Keep the new full-body avatar inside the frame. Legacy shift-right
     # settings were useful for the old small jellyfish, but clip this avatar.
-    x_expr = f"W-w-{margin_x}"
-    y_expr = f"H-h-{margin_y}"
+    # Keep the avatar alive without switching whole-body images: the canonical
+    # kvtuber lip-sync frames handle the mouth, and ffmpeg adds only a slow,
+    # subtle body sway so the old jump/flicker bug cannot return.
+    x_expr = f"W-w-{margin_x}+sin(t*1.013)*2"
+    y_expr = f"H-h-{margin_y}-abs(sin(t*0.604))*5"
     scaled = [f"[{i + 1}:v]format=rgba,scale={width}:-1[f{i}]" for i in range(len(frame_paths))]
     overlays = [f"[0:v][f0]overlay=x={x_expr}:y={y_expr}:format=auto[v0]"]
     for i in range(1, len(frame_paths)):
