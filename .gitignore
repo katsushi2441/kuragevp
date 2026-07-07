@@ -2,6 +2,7 @@
 vendor/
 storage/jobs/*
 storage/tmp/*
+storage/combined/*
 !storage/jobs/.gitkeep
 !storage/tmp/.gitkeep
 *.pyc
