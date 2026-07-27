@@ -483,11 +483,23 @@ def translate_srt(source_srt: Path, out_dir: Path, source_lang: str, target_lang
 
 
 async def _edge_tts(text: str, out: Path, voice: str, rate: str) -> None:
+    import asyncio
+
     import edge_tts
 
     tts_text = normalize_tts_text(text)
-    communicate = edge_tts.Communicate(tts_text, voice, rate=rate)
-    await communicate.save(str(out))
+    # Microsoft側の一時エラーでNoAudioReceivedが散発する(2026-07-27に実測。
+    # 同一パラメータで数分後に成功)。待ってからのリトライで大半は回復する。
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            communicate = edge_tts.Communicate(tts_text, voice, rate=rate)
+            await communicate.save(str(out))
+            return
+        except edge_tts.exceptions.NoAudioReceived as exc:
+            last_exc = exc
+            await asyncio.sleep(5 * (attempt + 1))
+    raise last_exc
 
 
 def _fit_audio_to_slot(src: Path, dst: Path, slot_seconds: float) -> tuple[Path, float, float]:
