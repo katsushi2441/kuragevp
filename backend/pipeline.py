@@ -330,8 +330,14 @@ def transcribe_audio(audio: Path, out_dir: Path, source_lang: str) -> tuple[Path
     text_lines: list[str] = []
     for idx, seg in enumerate(segments, 1):
         text = seg.text.strip()
+        if not text:
+            continue
         lines.append(f"{idx}\n{fmt_srt(seg.start)} --> {fmt_srt(seg.end)}\n{text}\n")
         text_lines.append(text)
+    if not lines:
+        raise RuntimeError(
+            "音声から発話を検出できませんでした。無音または翻訳できる発話がない動画です"
+        )
     srt.write_text("\n".join(lines), encoding="utf-8")
     txt.write_text("\n".join(text_lines), encoding="utf-8")
     return srt, txt
