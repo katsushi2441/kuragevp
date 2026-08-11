@@ -287,6 +287,20 @@ def curl_download(url: str, out_file: Path, timeout: int = 1800) -> Path:
     return out_file
 
 
+def ytdlp_download(url: str, out_dir: Path) -> Path | None:
+    """YouTube/Bilibili等のプラットフォームURLを yt-dlp で本体DL。成功時パス、失敗時None。
+    (curlだとページHTMLを掴んでしまい ffprobe「moov atom not found」で落ちるため)"""
+    out = out_dir / "source_ytdlp.mp4"
+    try:
+        run_cmd(["yt-dlp", "-f", "mp4/best", "--no-playlist", "-o", str(out), url], timeout=1800)
+    except Exception:
+        pass
+    if out.is_file() and out.stat().st_size > 0:
+        return out
+    cands = sorted(out_dir.glob("source_ytdlp*"), key=lambda p: p.stat().st_size, reverse=True)
+    return cands[0] if cands and cands[0].stat().st_size > 0 else None
+
+
 def download_video(url: str, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     if re.match(r"^https?://", url):
@@ -297,10 +311,14 @@ def download_video(url: str, out_dir: Path) -> Path:
             return curl_download(media_url, out_dir / f"x_{tweet_id}.mp4")
 
         clean = url.split("?", 1)[0]
-        ext = "mp4"
         m = re.search(r"\.([a-zA-Z0-9]{2,5})$", clean)
-        if m and m.group(1).lower() in {"mp4", "mov", "m4v", "webm"}:
-            ext = m.group(1).lower()
+        direct_ext = m.group(1).lower() if m else ""
+        if direct_ext not in {"mp4", "mov", "m4v", "webm"}:
+            # 直リンクmp4等でない = YouTube/Bilibili等のページURL → yt-dlpで本体取得
+            ytv = ytdlp_download(url, out_dir)
+            if ytv is not None:
+                return ytv
+        ext = direct_ext if direct_ext in {"mp4", "mov", "m4v", "webm"} else "mp4"
         return curl_download(url, out_dir / f"{safe_name(clean)}.{ext}")
 
     src = Path(url)
