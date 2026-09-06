@@ -718,18 +718,59 @@ def first_content_line(text: str) -> str:
     return next((line.strip() for line in (text or "").splitlines() if line.strip()), "")
 
 
+_TRANSLATE_ERROR_RX = re.compile(
+    r"Error\s*\d{3}|That[’']s an error|Server Error|<html|The requested URL|Sorry, we have detected unusual traffic",
+    re.IGNORECASE,
+)
+
+
+def looks_like_translation_error(text: str) -> bool:
+    """deep_translator は Google が 500/CAPTCHA ページを返してもそのページ本文を『翻訳結果』として
+    返すことがある（2026-09-07 実測: 動画タイトルが「Error 500 (Server Error)!!1…」になった21件）。
+    例外にならないので、結果を検査して弾く。"""
+    return bool(_TRANSLATE_ERROR_RX.search(text or ""))
+
+
+def translate_plain_text_local(text: str, target_lang: str) -> str:
+    """Google 翻訳が壊れたときの控え: ローカル gemma4（0.3 直・think:false）。失敗は空文字。"""
+    lang_name = {"ja": "日本語", "en": "英語", "ko": "韓国語", "zh": "中国語"}.get((target_lang or "")[:2].lower(), target_lang)
+    try:
+        import json as _json
+        import urllib.request as _ur
+
+        body = _json.dumps({
+            "model": os.environ.get("KURAGEVP_LOCAL_LLM", "gemma4:12b-it-qat"),
+            "prompt": f"次のテキストを{lang_name}に翻訳してください。訳文だけを出力し、説明や引用符は付けないでください。\n\n{text}",
+            "stream": False, "think": False,
+            "options": {"num_predict": 200, "temperature": 0.2},
+        }).encode("utf-8")
+        req = _ur.Request(os.environ.get("KURAGEVP_OLLAMA_URL", "http://192.168.0.3:11434") + "/api/generate",
+                          data=body, headers={"Content-Type": "application/json"})
+        with _ur.urlopen(req, timeout=120) as res:
+            out = (_json.loads(res.read().decode("utf-8")).get("response") or "").strip()
+        out = out.strip().strip('"').strip("「」").strip()
+        return "" if looks_like_translation_error(out) else out
+    except Exception:
+        return ""
+
+
 def translate_plain_text(text: str, target_lang: str, limit: int = 900) -> str:
     text = re.sub(r"\s+", " ", (text or "").strip())
     if not text:
         return ""
     if len(text) > limit:
         text = text[:limit].rsplit(" ", 1)[0] or text[:limit]
+    result = ""
     try:
         from deep_translator import GoogleTranslator
 
-        return (GoogleTranslator(source="auto", target=target_lang).translate(text) or text).strip()
+        result = (GoogleTranslator(source="auto", target=target_lang).translate(text) or "").strip()
     except Exception:
-        return text
+        result = ""
+    if not result or looks_like_translation_error(result):
+        # Google のエラーページを訳文として通さない。ローカルLLMで訳し直し、それも駄目なら原文を返す
+        result = translate_plain_text_local(text, target_lang) or text
+    return result
 
 
 def smart_truncate(text: str, limit: int) -> str:
@@ -805,8 +846,15 @@ def target_language_name(target_lang: str) -> str:
 
 
 def is_generic_source_title(text: str) -> bool:
+    """元タイトルが取れなかったときのプレースホルダは題名に使わない（本文1行目から作る）。
+    「翻訳元動画」がそのまま英訳されて "Translated source video" という題名になった前例（2026-09-07）。"""
     normalized = re.sub(r"\s+", "", (text or "").strip()).lower()
-    return normalized in {"", "x投稿", "twitter投稿", "tweet", "xpost", "twitterpost"}
+    if normalized in {"", "x投稿", "twitter投稿", "tweet", "xpost", "twitterpost",
+                      "翻訳元動画", "元動画", "translatedsourcevideo", "sourcevideo"}:
+        return True
+    if normalized.endswith("translationvideo") or normalized.endswith("翻訳動画"):
+        return True
+    return looks_like_translation_error(text or "")
 
 
 def should_translate_title_to_ja(text: str) -> bool:
